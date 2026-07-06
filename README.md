@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.5.
+Early MVP / debug version. Current add-on version: 0.1.6.
 
 Current scope:
 
@@ -141,3 +141,10 @@ dimmer-lamp brightness:
 button/script/light-scheme:
   PRESS -> "0xFF"
 ```
+
+## 0.1.6 connection resilience
+
+Both the status and command WebSocket connections now reconnect automatically with
+exponential backoff (5s up to 60s) if the connection to Larnitech drops. Previously a
+dropped connection silently stopped status updates and/or commands until the add-on
+was restarted manually.
