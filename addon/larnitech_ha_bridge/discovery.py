@@ -18,6 +18,7 @@ SUPPORTED_TYPES = {
     "leak-sensor": "binary_sensor",
     "valve": "switch",
     "valve-heating": "switch",
+    "fancoil": "climate",
     "light-scheme": "button",
     "script": "button",
     # Keep switch supported technically, but filter physical input switches by default in config.
@@ -102,7 +103,11 @@ def device_info(
     }
 
 
-def display_name(device: LarnitechDevice, grouping: Literal["area", "bridge", "entity"], prefix_area: bool = True) -> str:
+def display_name(
+    device: LarnitechDevice,
+    grouping: Literal["area", "bridge", "entity"],
+    prefix_area: bool = True,
+) -> str:
     name = device.name or device.addr
     if grouping == "bridge" and prefix_area and device.area:
         return f"{device.area} · {name}"
@@ -126,6 +131,10 @@ def discovery_payload(
         "availability_topic": f"{bridge_id}/availability",
         "device": device_info(bridge_id, device, grouping),
     }
+
+    if component == "climate":
+        payload.update(_climate_discovery_payload(topic, device))
+        return payload
 
     if component in {"switch", "light"}:
         payload.update(
@@ -189,7 +198,72 @@ def discovery_payload(
     return payload
 
 
-def diagnostics_sensor_payload(bridge_id: str, object_suffix: str, name: str) -> tuple[str, dict[str, Any]]:
+def _climate_discovery_payload(topic: str, device: LarnitechDevice) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "mode_state_topic": f"{topic}/mode/state",
+        "mode_command_topic": f"{topic}/mode/set",
+        "modes": ["off", "heat", "cool"],
+        "current_temperature_topic": f"{topic}/current_temperature/state",
+        "temperature_state_topic": f"{topic}/target_temperature/state",
+        "temperature_unit": "C",
+        "precision": 0.1,
+        "temp_step": 0.5,
+        "fan_mode_state_topic": f"{topic}/fan_mode/state",
+        "fan_mode_command_topic": f"{topic}/fan_mode/set",
+        "fan_modes": ["off", "low", "medium", "high", "max"],
+        "json_attributes_topic": f"{topic}/attributes",
+    }
+
+    min_temp = _float_attr(device.raw, "t-min", "t_min")
+    max_temp = _float_attr(device.raw, "t-max", "t_max")
+    if min_temp is not None:
+        payload["min_temp"] = min_temp
+    if max_temp is not None:
+        payload["max_temp"] = max_temp
+
+    preset_modes = _preset_modes(device)
+    if preset_modes:
+        payload.update(
+            {
+                "preset_modes": preset_modes,
+                "preset_mode_state_topic": f"{topic}/preset/state",
+                "preset_mode_command_topic": f"{topic}/preset/set",
+            }
+        )
+
+    return payload
+
+
+def _float_attr(raw: dict[str, Any], *names: str) -> float | None:
+    for name in names:
+        value = raw.get(name)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _preset_modes(device: LarnitechDevice) -> list[str]:
+    automations = device.raw.get("automations")
+    if not isinstance(automations, list):
+        return []
+
+    modes: list[str] = []
+    for automation in automations:
+        if not isinstance(automation, str):
+            continue
+        automation = automation.strip()
+        if automation and automation not in modes:
+            modes.append(automation)
+    return modes
+
+
+def diagnostics_sensor_payload(
+    bridge_id: str, object_suffix: str, name: str
+) -> tuple[str, dict[str, Any]]:
     topic_base = f"{bridge_id}/diagnostics/{slugify(object_suffix)}"
     unique_id = slugify(f"{bridge_id}_{object_suffix}")
     discovery = {
