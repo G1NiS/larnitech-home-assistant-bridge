@@ -51,7 +51,19 @@ async def run_bridge() -> None:
         while True:
             try:
                 await command_api.connect()
-                delay = RECONNECT_DELAY_INITIAL
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Failed to connect Larnitech command WebSocket, retrying in %s s", delay
+                )
+                await command_api.close()
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
+                continue
+
+            delay = RECONNECT_DELAY_INITIAL
+            try:
                 while True:
                     addr, payload, kind = await pending_commands.get()
                     device = devices_by_addr.get(addr)
@@ -71,12 +83,10 @@ async def run_bridge() -> None:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception(
-                    "Larnitech command connection lost, reconnecting in %s s", delay
-                )
+                # Connection-level failure (dropped socket, timed-out response, etc.). Reconnect
+                # immediately without backoff - the delay only grows if the reconnect itself fails.
+                logger.exception("Larnitech command connection lost, reconnecting")
                 await command_api.close()
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     async def larnitech_worker() -> None:
         delay = RECONNECT_DELAY_INITIAL
@@ -84,7 +94,19 @@ async def run_bridge() -> None:
             try:
                 await status_api.connect()
                 devices = await status_api.get_devices()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Failed to connect Larnitech status WebSocket, retrying in %s s", delay
+                )
+                await status_api.close()
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, RECONNECT_DELAY_MAX)
+                continue
 
+            delay = RECONNECT_DELAY_INITIAL
+            try:
                 filtered_devices = [
                     device
                     for device in devices
@@ -99,18 +121,15 @@ async def run_bridge() -> None:
                 mqtt_client.publish_initial_status(published_devices)
                 await status_api.subscribe_status()
 
-                delay = RECONNECT_DELAY_INITIAL
                 async for status in status_api.status_events():
                     mqtt_client.publish_status(status)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception(
-                    "Larnitech status connection lost, reconnecting in %s s", delay
-                )
+                # Connection-level failure. Reconnect immediately without backoff - the delay
+                # only grows if the reconnect itself fails.
+                logger.exception("Larnitech status connection lost, reconnecting")
                 await status_api.close()
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, RECONNECT_DELAY_MAX)
 
     stop_event = asyncio.Event()
 
