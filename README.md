@@ -53,7 +53,7 @@ Settings → Add-ons → Add-on Store → ⋮ → Repositories
 5. Configure:
 
 ```yaml
-larnitech_host: "192.168.32.121"
+larnitech_host: "192.168.xxx.xxx"
 larnitech_port: 2041
 larnitech_api_key: "YOUR_API_KEY"
 mqtt_host: "core-mosquitto"
