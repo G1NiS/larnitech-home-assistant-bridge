@@ -16,7 +16,13 @@ def test_discovery_payload_has_topics():
 
 
 def test_area_grouping_uses_area_device_identifier():
-    device = LarnitechDevice(addr="493:166", name="Virtuvės šviestuvai", type="dimmer-lamp", area="Virtuvė", raw={})
+    device = LarnitechDevice(
+        addr="493:166",
+        name="Virtuvės šviestuvai",
+        type="dimmer-lamp",
+        area="Virtuvė",
+        raw={},
+    )
     payload = discovery_payload("larnitech", device, grouping="area")
     assert payload is not None
     assert payload["device"]["identifiers"] == ["larnitech_area_virtuv"]
@@ -32,11 +38,40 @@ def test_door_sensor_maps_to_binary_sensor():
 
 
 def test_illumination_sensor_maps_to_sensor():
-    device = LarnitechDevice(addr="999:1", name="Illumination", type="illumination-sensor", area="Setup", raw={})
+    device = LarnitechDevice(
+        addr="999:1",
+        name="Illumination",
+        type="illumination-sensor",
+        area="Setup",
+        raw={},
+    )
     payload = discovery_payload("larnitech", device)
     assert payload is not None
     assert payload["device_class"] == "illuminance"
     assert payload["unit_of_measurement"] == "lx"
+
+
+def test_fancoil_maps_to_climate():
+    device = LarnitechDevice(
+        addr="415:52",
+        name="Miegamasis",
+        type="fancoil",
+        area="Setup",
+        raw={
+            "automations": ["Mode", "Comfort", "Off", "Eco", "Fast"],
+            "status": {"state": "on", "current": 23.1, "fan": 33.2, "mode": "heat"},
+        },
+    )
+
+    assert entity_component(device) == "climate"
+    payload = discovery_payload("larnitech", device)
+
+    assert payload is not None
+    assert payload["mode_command_topic"] == "larnitech/415_52/mode/set"
+    assert payload["mode_state_topic"] == "larnitech/415_52/mode/state"
+    assert payload["current_temperature_topic"] == "larnitech/415_52/current_temperature/state"
+    assert payload["fan_mode_command_topic"] == "larnitech/415_52/fan_mode/set"
+    assert payload["preset_modes"] == ["Mode", "Comfort", "Off", "Eco", "Fast"]
 
 
 def test_normalize_dict_state():
@@ -46,15 +81,27 @@ def test_normalize_dict_state():
 
 
 def test_object_id_is_address_stable():
-    from larnitech_ha_bridge.discovery import object_id, legacy_object_id
+    from larnitech_ha_bridge.discovery import legacy_object_id, object_id
 
-    device = LarnitechDevice(addr="493:166", name="Virtuvės šviestuvai", type="dimmer-lamp", area="Virtuvė", raw={})
+    device = LarnitechDevice(
+        addr="493:166",
+        name="Virtuvės šviestuvai",
+        type="dimmer-lamp",
+        area="Virtuvė",
+        raw={},
+    )
     assert object_id("larnitech", device) == "larnitech_493_166"
     assert legacy_object_id("larnitech", device) == "larnitech_493_166_virtuv_s_viestuvai"
 
 
 def test_bridge_grouping_uses_single_device():
-    device = LarnitechDevice(addr="493:166", name="Salos šviestuvai", type="dimmer-lamp", area="Virtuvė", raw={})
+    device = LarnitechDevice(
+        addr="493:166",
+        name="Salos šviestuvai",
+        type="dimmer-lamp",
+        area="Virtuvė",
+        raw={},
+    )
     payload = discovery_payload("larnitech", device, grouping="bridge", prefix_area=True)
     assert payload is not None
     assert payload["device"]["identifiers"] == ["larnitech_bridge"]
@@ -63,7 +110,13 @@ def test_bridge_grouping_uses_single_device():
 
 
 def test_dimmer_discovery_has_brightness_topics():
-    device = LarnitechDevice(addr="493:118", name="Lempa", type="dimmer-lamp", area="Darbo kambarys", raw={})
+    device = LarnitechDevice(
+        addr="493:118",
+        name="Lempa",
+        type="dimmer-lamp",
+        area="Darbo kambarys",
+        raw={},
+    )
     payload = discovery_payload("larnitech", device, grouping="bridge", prefix_area=True)
     assert payload is not None
     assert payload["brightness_command_topic"] == "larnitech/493_118/brightness/set"
@@ -82,5 +135,30 @@ def test_command_payload_for_lamp_on_off():
 def test_command_payload_for_dimmer_brightness():
     from larnitech_ha_bridge.commands import larnitech_status_for_command
 
-    device = LarnitechDevice(addr="493:118", name="Lempa", type="dimmer-lamp", area="Darbo kambarys", raw={})
+    device = LarnitechDevice(
+        addr="493:118",
+        name="Lempa",
+        type="dimmer-lamp",
+        area="Darbo kambarys",
+        raw={},
+    )
     assert larnitech_status_for_command(device, "42", "brightness") == {"level": 42}
+
+
+def test_command_payload_for_fancoil_mode_and_fan():
+    from larnitech_ha_bridge.commands import larnitech_status_for_command
+
+    device = LarnitechDevice(addr="415:52", name="Miegamasis", type="fancoil", area="Setup", raw={})
+    assert larnitech_status_for_command(device, "heat", "mode") == {
+        "state": "on",
+        "mode": "heat",
+    }
+    assert larnitech_status_for_command(device, "off", "mode") == {"state": "off"}
+    assert larnitech_status_for_command(device, "medium", "fan_mode") == {
+        "state": "on",
+        "fan": 50,
+    }
+    assert larnitech_status_for_command(device, "Eco", "preset") == {
+        "state": "on",
+        "automation": "Eco",
+    }
