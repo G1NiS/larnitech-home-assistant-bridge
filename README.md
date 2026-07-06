@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.8.
+Early MVP / debug version. Current add-on version: 0.1.9.
 
 Current scope:
 
@@ -28,6 +28,7 @@ Current scope:
 - Group all Larnitech entities under one Home Assistant device by default.
 - Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
+- Publish Larnitech fancoils as Home Assistant climate entities.
 
 ## Architecture
 
@@ -157,3 +158,14 @@ was restarted manually.
   5+ seconds.
 - A command that was in flight when the command connection died is put back on the
   queue and retried once reconnected, instead of being silently dropped.
+
+## 0.1.9 fancoil climate support
+
+- Adds `type="fancoil"` support as Home Assistant MQTT `climate` entities.
+- Publishes fancoil HVAC mode, current temperature, target temperature when available,
+  fan mode and raw attributes.
+- Keeps fancoils visible even when Larnitech reports them under the internal `Setup`
+  area while `hide_setup_area: true` is enabled.
+- Maps fancoil `automations` to Home Assistant preset modes.
+- Adds basic fancoil commands for HVAC mode, fan mode and preset mode.
+- Keeps target temperature command disabled until real API behaviour is confirmed.
