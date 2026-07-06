@@ -15,6 +15,11 @@ def setup_logging(level: str) -> None:
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
 
+    # Keep third-party WebSocket frame logs quiet even when bridge debug logging is enabled.
+    # Otherwise raw API payloads can expose private API keys in Home Assistant logs.
+    logging.getLogger("websockets").setLevel(logging.INFO)
+    logging.getLogger("websockets.client").setLevel(logging.INFO)
+
 
 async def run_bridge() -> None:
     config = load_config()

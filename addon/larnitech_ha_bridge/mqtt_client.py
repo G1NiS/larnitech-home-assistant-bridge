@@ -7,7 +7,7 @@ from collections.abc import Callable
 import paho.mqtt.client as mqtt
 
 from .config import BridgeConfig
-from .discovery import discovery_payload, discovery_topic, normalize_state
+from .discovery import discovery_payload, discovery_topic, normalize_state, slugify
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class MqttBridgeClient:
             _LOGGER.warning("Unsupported devices: %s", unsupported)
 
     def publish_status(self, status: DeviceStatus) -> None:
-        topic = f"{self.config.bridge_id}/{status.addr}/state"
+        topic = f"{self.config.bridge_id}/{slugify(status.addr)}/state"
         self.client.publish(topic, normalize_state(status.value), retain=True)
         self.client.publish(f"{topic}_raw", json.dumps(status.raw), retain=True)
 

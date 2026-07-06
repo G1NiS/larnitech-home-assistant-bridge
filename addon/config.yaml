@@ -1,5 +1,5 @@
 name: "Larnitech Bridge for Home Assistant"
-version: "0.1.0"
+version: "0.1.1"
 slug: "larnitech_ha_bridge"
 description: "Unofficial Home Assistant bridge for Larnitech-compatible systems using API2 and MQTT Discovery"
 url: "https://github.com/GiNiS/larnitech-home-assistant-bridge"
