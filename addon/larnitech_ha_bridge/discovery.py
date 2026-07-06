@@ -139,6 +139,16 @@ def discovery_payload(
             }
         )
 
+        if device.type == "dimmer-lamp":
+            payload.update(
+                {
+                    "brightness_command_topic": f"{topic}/brightness/set",
+                    "brightness_state_topic": f"{topic}/brightness/state",
+                    "brightness_scale": 100,
+                    "brightness_value_template": "{{ value | int }}",
+                }
+            )
+
     if component == "button":
         payload.update(
             {
@@ -200,6 +210,11 @@ def normalize_state(value: Any) -> str:
             return normalize_state(value["state"])
         if "value" in value:
             return normalize_state(value["value"])
+        if "level" in value:
+            try:
+                return "ON" if float(value["level"]) > 0 else "OFF"
+            except (TypeError, ValueError):
+                return str(value["level"])
         return str(value)
 
     if isinstance(value, bool):

@@ -60,3 +60,27 @@ def test_bridge_grouping_uses_single_device():
     assert payload["device"]["identifiers"] == ["larnitech_bridge"]
     assert payload["device"]["name"] == "Larnitech Smart House"
     assert payload["name"] == "Virtuvė · Salos šviestuvai"
+
+
+def test_dimmer_discovery_has_brightness_topics():
+    device = LarnitechDevice(addr="493:118", name="Lempa", type="dimmer-lamp", area="Darbo kambarys", raw={})
+    payload = discovery_payload("larnitech", device, grouping="bridge", prefix_area=True)
+    assert payload is not None
+    assert payload["brightness_command_topic"] == "larnitech/493_118/brightness/set"
+    assert payload["brightness_state_topic"] == "larnitech/493_118/brightness/state"
+    assert payload["brightness_scale"] == 100
+
+
+def test_command_payload_for_lamp_on_off():
+    from larnitech_ha_bridge.commands import larnitech_status_for_command
+
+    device = LarnitechDevice(addr="406:7", name="Kiemas", type="lamp", area="Namas", raw={})
+    assert larnitech_status_for_command(device, "ON", "state") == {"state": "on"}
+    assert larnitech_status_for_command(device, "OFF", "state") == {"state": "off"}
+
+
+def test_command_payload_for_dimmer_brightness():
+    from larnitech_ha_bridge.commands import larnitech_status_for_command
+
+    device = LarnitechDevice(addr="493:118", name="Lempa", type="dimmer-lamp", area="Darbo kambarys", raw={})
+    assert larnitech_status_for_command(device, "42", "brightness") == {"level": 42}

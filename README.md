@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.4.
+Early MVP / debug version. Current add-on version: 0.1.5.
 
 Current scope:
 
@@ -115,3 +115,29 @@ publish_module_diagnostics: true
 ```
 
 The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
+
+
+## 0.1.5 command flow
+
+The bridge uses two Larnitech API2 WebSocket connections:
+
+```text
+status WebSocket  -> get-devices, status-subscribe, live status events
+command WebSocket -> status-set commands from Home Assistant/MQTT
+```
+
+This avoids concurrent `recv()` calls on the same WebSocket connection and makes command testing easier.
+
+Supported control commands:
+
+```text
+lamp / dimmer-lamp / switch / valve / valve-heating:
+  ON  -> {"state": "on"}
+  OFF -> {"state": "off"}
+
+dimmer-lamp brightness:
+  0..100 -> {"level": value}
+
+button/script/light-scheme:
+  PRESS -> "0xFF"
+```

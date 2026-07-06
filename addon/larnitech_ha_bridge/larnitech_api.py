@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -17,39 +18,38 @@ class LarnitechApiError(RuntimeError):
 
 
 class LarnitechApiClient:
-    def __init__(self, ws_url: str, api_key: str) -> None:
+    def __init__(self, ws_url: str, api_key: str, name: str = "api") -> None:
         self.ws_url = ws_url
         self.api_key = api_key
+        self.name = name
         self._ws: Any | None = None
         self._request_id = 0
         self._authorized = False
 
     async def connect(self) -> None:
-        _LOGGER.info("Connecting to Larnitech API2 at %s", self.ws_url)
+        _LOGGER.info("[%s] Connecting to Larnitech API2 at %s", self.name, self.ws_url)
         self._ws = await websockets.connect(self.ws_url, ping_interval=30, ping_timeout=10)
-        _LOGGER.info("Connected to Larnitech API2 WebSocket")
+        _LOGGER.info("[%s] Connected to Larnitech API2 WebSocket", self.name)
         await self.authorize()
 
     async def authorize(self) -> None:
         if self._ws is None:
             raise RuntimeError("Larnitech WebSocket is not connected")
 
-        # Larnitech API2 requires this separate authorization step first.
-        # The API key is intentionally not included in later requests.
         message = {
             "request": "authorize",
             "key": self.api_key,
         }
-        _LOGGER.debug("Larnitech request: {'request': 'authorize', 'key': '***'}")
+        _LOGGER.debug("[%s] Larnitech request: {'request': 'authorize', 'key': '***'}", self.name)
         await self._ws.send(json.dumps(message))
 
-        raw_response = await self._ws.recv()
+        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=10)
         response = json.loads(raw_response)
-        _LOGGER.debug("Larnitech authorize response: %s", response)
+        _LOGGER.debug("[%s] Larnitech authorize response: %s", self.name, response)
 
         self._raise_if_error(response, "authorize")
         self._authorized = True
-        _LOGGER.info("Authorized with Larnitech API2")
+        _LOGGER.info("[%s] Authorized with Larnitech API2", self.name)
 
     async def close(self) -> None:
         if self._ws is not None:
@@ -72,12 +72,12 @@ class LarnitechApiClient:
             "id": self._next_id(),
             **payload,
         }
-        _LOGGER.debug("Larnitech request: %s", message)
+        _LOGGER.debug("[%s] Larnitech request: %s", self.name, message)
         await self._ws.send(json.dumps(message))
 
-        raw_response = await self._ws.recv()
+        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=10)
         response = json.loads(raw_response)
-        _LOGGER.debug("Larnitech response: %s", response)
+        _LOGGER.debug("[%s] Larnitech response: %s", self.name, response)
         self._raise_if_error(response, request_type)
         return response
 
@@ -94,10 +94,11 @@ class LarnitechApiClient:
             raw_devices = list(raw_devices.values())
 
         devices = [LarnitechDevice.from_raw(item) for item in raw_devices if isinstance(item, dict)]
-        _LOGGER.info("Discovered %s Larnitech devices", len(devices))
+        _LOGGER.info("[%s] Discovered %s Larnitech devices", self.name, len(devices))
         for device in devices:
             _LOGGER.debug(
-                "Device: addr=%s name=%s type=%s area=%s raw=%s",
+                "[%s] Device: addr=%s name=%s type=%s area=%s raw=%s",
+                self.name,
                 device.addr,
                 device.name,
                 device.type,
@@ -107,19 +108,16 @@ class LarnitechApiClient:
         return devices
 
     async def set_status(self, addr: str, status: Any) -> dict[str, Any]:
-        if isinstance(status, bool):
-            status = {"state": "on" if status else "off"}
+        _LOGGER.info("[%s] Sending status-set: addr=%s status=%s", self.name, addr, status)
         return await self.request("status-set", addr=addr, status=status)
 
     async def subscribe_status(self, addr: str | None = None) -> None:
         payload = {"addr": addr} if addr else {}
         try:
             await self.request("status-subscribe", **payload)
-            _LOGGER.info("Subscribed to Larnitech status updates")
+            _LOGGER.info("[%s] Subscribed to Larnitech status updates", self.name)
         except LarnitechApiError as exc:
-            # Some installations may require per-device subscriptions.
-            # For MVP/debug mode, keep bridge running so discovery data remains visible.
-            _LOGGER.warning("Status subscription failed: %s", exc)
+            _LOGGER.warning("[%s] Status subscription failed: %s", self.name, exc)
 
     async def status_events(self) -> AsyncIterator[DeviceStatus]:
         if self._ws is None:
@@ -130,7 +128,7 @@ class LarnitechApiClient:
             try:
                 data = json.loads(raw_message)
             except json.JSONDecodeError:
-                _LOGGER.warning("Invalid JSON from Larnitech: %s", raw_message)
+                _LOGGER.warning("[%s] Invalid JSON from Larnitech: %s", self.name, raw_message)
                 continue
 
             for status in self._extract_status_events(data):

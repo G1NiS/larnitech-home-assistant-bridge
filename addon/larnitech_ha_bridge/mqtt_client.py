@@ -5,18 +5,33 @@ import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import paho.mqtt.client as mqtt
 
 from .config import BridgeConfig
-from .discovery import diagnostics_sensor_payload, discovery_payload, discovery_topic, entity_component, legacy_discovery_topic, normalize_state, slugify
+from .discovery import (
+    diagnostics_sensor_payload,
+    discovery_payload,
+    discovery_topic,
+    entity_component,
+    legacy_discovery_topic,
+    normalize_state,
+    slugify,
+)
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
 
+CommandKind = Literal["state", "brightness", "press"]
+
 
 class MqttBridgeClient:
-    def __init__(self, config: BridgeConfig, command_callback: Callable[[str, str], None]) -> None:
+    def __init__(
+        self,
+        config: BridgeConfig,
+        command_callback: Callable[[str, str, CommandKind], None],
+    ) -> None:
         self.config = config
         self.command_callback = command_callback
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -25,7 +40,8 @@ class MqttBridgeClient:
 
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
-        self._addr_by_command_topic: dict[str, str] = {}
+        self._command_by_topic: dict[str, tuple[str, CommandKind]] = {}
+        self._devices_by_addr: dict[str, LarnitechDevice] = {}
         self._discovery_state_path = Path("/data/discovery_topics.json")
 
     def connect(self) -> None:
@@ -47,6 +63,7 @@ class MqttBridgeClient:
 
     def publish_discovery(self, devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
         publishable = [device for device in devices if self.should_publish(device)]
+        self._devices_by_addr = {device.addr: device for device in publishable}
 
         current_topics: set[str] = set()
         all_supported_topics: set[str] = set()
@@ -120,8 +137,19 @@ class MqttBridgeClient:
 
             command_topic = payload.get("command_topic")
             if command_topic:
-                self._addr_by_command_topic[command_topic] = device.addr
+                self._command_by_topic[command_topic] = (device.addr, "state")
                 self.client.subscribe(command_topic)
+
+            brightness_command_topic = payload.get("brightness_command_topic")
+            if brightness_command_topic:
+                self._command_by_topic[brightness_command_topic] = (device.addr, "brightness")
+                self.client.subscribe(brightness_command_topic)
+
+            if entity_component(device) == "button":
+                button_command_topic = payload.get("command_topic")
+                if button_command_topic:
+                    self._command_by_topic[button_command_topic] = (device.addr, "press")
+                    self.client.subscribe(button_command_topic)
 
         _LOGGER.info(
             "Published MQTT discovery for %s entities using device_grouping=%s",
@@ -289,9 +317,29 @@ class MqttBridgeClient:
         _LOGGER.info("Published initial MQTT state for %s entities", published)
 
     def publish_status(self, status: DeviceStatus) -> None:
-        topic = f"{self.config.bridge_id}/{slugify(status.addr)}/state"
-        self.client.publish(topic, normalize_state(status.value), retain=True)
-        self.client.publish(f"{topic}_raw", json.dumps(status.raw), retain=True)
+        topic_base = f"{self.config.bridge_id}/{slugify(status.addr)}"
+        state_topic = f"{topic_base}/state"
+        self.client.publish(state_topic, normalize_state(status.value), retain=True)
+        self.client.publish(f"{state_topic}_raw", json.dumps(status.raw), retain=True)
+
+        device = self._devices_by_addr.get(status.addr)
+        if device and device.type == "dimmer-lamp":
+            level = self._extract_level(status.value)
+            if level is not None:
+                self.client.publish(f"{topic_base}/brightness/state", str(level), retain=True)
+
+    @staticmethod
+    def _extract_level(value) -> int | None:
+        if not isinstance(value, dict):
+            return None
+        raw_level = value.get("level")
+        if raw_level is None:
+            return None
+        try:
+            level = float(raw_level)
+        except (TypeError, ValueError):
+            return None
+        return max(0, min(100, int(round(level))))
 
     def _cleanup_stale_discovery_topics(
         self,
@@ -301,9 +349,6 @@ class MqttBridgeClient:
     ) -> None:
         previous_topics = self._load_discovery_topics()
 
-        # Clear topics that used to exist but are no longer published.
-        # v0.1.0-v0.1.2 used name-based object IDs and one device per entity.
-        # v0.1.3 migrates to address-only object IDs and area/bridge grouping.
         stale_topics = (previous_topics | all_supported_topics) - current_topics
 
         if self.config.cleanup_legacy_mqtt:
@@ -314,8 +359,6 @@ class MqttBridgeClient:
 
         if stale_topics:
             _LOGGER.info("Cleared %s stale/legacy MQTT discovery topics", len(stale_topics))
-            # Give Home Assistant a short moment to process retained config removals
-            # before the new grouped discovery payloads arrive.
             time.sleep(2)
 
     def _load_discovery_topics(self) -> set[str]:
@@ -330,7 +373,7 @@ class MqttBridgeClient:
 
     def _save_discovery_topics(self, topics: set[str]) -> None:
         try:
-            self._discovery_state_path.parent.mkdir(parents=True, exist_ok=True)
+            self._discovery_state_path.parent.mkdir(parents=True)
             self._discovery_state_path.write_text(
                 json.dumps({"topics": sorted(topics)}, indent=2),
                 encoding="utf-8",
@@ -341,15 +384,16 @@ class MqttBridgeClient:
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         _LOGGER.info("Connected to MQTT: %s", reason_code)
         self.publish_availability(True)
-        for command_topic in self._addr_by_command_topic:
+        for command_topic in self._command_by_topic:
             client.subscribe(command_topic)
 
     def _on_message(self, client, userdata, message) -> None:
         payload = message.payload.decode("utf-8")
-        addr = self._addr_by_command_topic.get(message.topic)
-        if addr is None:
+        command = self._command_by_topic.get(message.topic)
+        if command is None:
             _LOGGER.debug("Ignoring MQTT message on unknown topic %s", message.topic)
             return
 
-        _LOGGER.info("MQTT command: addr=%s payload=%s", addr, payload)
-        self.command_callback(addr, payload)
+        addr, kind = command
+        _LOGGER.info("MQTT command: addr=%s kind=%s payload=%s", addr, kind, payload)
+        self.command_callback(addr, payload, kind)
