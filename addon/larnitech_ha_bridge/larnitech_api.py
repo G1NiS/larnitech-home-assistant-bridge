@@ -12,6 +12,10 @@ from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT = 10
+WEBSOCKET_OPEN_TIMEOUT = 10
+WEBSOCKET_CLOSE_TIMEOUT = 2
+
 
 class LarnitechApiError(RuntimeError):
     """Raised when Larnitech API2 returns an error response."""
@@ -28,7 +32,15 @@ class LarnitechApiClient:
 
     async def connect(self) -> None:
         _LOGGER.info("[%s] Connecting to Larnitech API2 at %s", self.name, self.ws_url)
-        self._ws = await websockets.connect(self.ws_url, ping_interval=30, ping_timeout=10)
+        self._ws = await websockets.connect(
+            self.ws_url,
+            # Larnitech API2 closes some clients because it does not consistently answer
+            # Python websockets protocol pings. Disable client-side protocol keepalive and
+            # let the bridge reconnect only on real socket/request failures.
+            ping_interval=None,
+            open_timeout=WEBSOCKET_OPEN_TIMEOUT,
+            close_timeout=WEBSOCKET_CLOSE_TIMEOUT,
+        )
         _LOGGER.info("[%s] Connected to Larnitech API2 WebSocket", self.name)
         await self.authorize()
 
@@ -43,7 +55,7 @@ class LarnitechApiClient:
         _LOGGER.debug("[%s] Larnitech request: {'request': 'authorize', 'key': '***'}", self.name)
         await self._ws.send(json.dumps(message))
 
-        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=10)
+        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=REQUEST_TIMEOUT)
         response = json.loads(raw_response)
         _LOGGER.debug("[%s] Larnitech authorize response: %s", self.name, response)
 
@@ -52,10 +64,18 @@ class LarnitechApiClient:
         _LOGGER.info("[%s] Authorized with Larnitech API2", self.name)
 
     async def close(self) -> None:
-        if self._ws is not None:
-            await self._ws.close()
-            self._ws = None
-            self._authorized = False
+        ws = self._ws
+        self._ws = None
+        self._authorized = False
+
+        if ws is None:
+            return
+
+        try:
+            await asyncio.wait_for(ws.close(), timeout=WEBSOCKET_CLOSE_TIMEOUT + 1)
+        except Exception as exc:
+            # Connection is already broken. Do not block reconnect loops on graceful close.
+            _LOGGER.debug("[%s] Ignoring WebSocket close error: %s", self.name, exc)
 
     def _next_id(self) -> int:
         self._request_id += 1
@@ -75,7 +95,7 @@ class LarnitechApiClient:
         _LOGGER.debug("[%s] Larnitech request: %s", self.name, message)
         await self._ws.send(json.dumps(message))
 
-        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=10)
+        raw_response = await asyncio.wait_for(self._ws.recv(), timeout=REQUEST_TIMEOUT)
         response = json.loads(raw_response)
         _LOGGER.debug("[%s] Larnitech response: %s", self.name, response)
         self._raise_if_error(response, request_type)
