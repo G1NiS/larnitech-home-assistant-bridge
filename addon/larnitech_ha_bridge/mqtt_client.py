@@ -373,7 +373,7 @@ class MqttBridgeClient:
 
     def _save_discovery_topics(self, topics: set[str]) -> None:
         try:
-            self._discovery_state_path.parent.mkdir(parents=True)
+            self._discovery_state_path.parent.mkdir(parents=True, exist_ok=True)
             self._discovery_state_path.write_text(
                 json.dumps({"topics": sorted(topics)}, indent=2),
                 encoding="utf-8",

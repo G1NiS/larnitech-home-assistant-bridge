@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.7.
+Early MVP / debug version. Current add-on version: 0.1.8.
 
 Current scope:
 

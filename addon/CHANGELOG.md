@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8
+
+- Fixed a bug where MQTT discovery state was never saved to disk (`/data` already
+  exists in the add-on, so the directory creation call always raised and was silently
+  swallowed). Without this, stale/renamed Larnitech item discovery topics were never
+  cleaned up across add-on restarts.
+
 ## 0.1.7
 
 - Reconnect immediately on connection loss instead of always waiting out the backoff
