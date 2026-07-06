@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.2.
+Early MVP / debug version. Current add-on version: 0.1.4.
 
 Current scope:
 
@@ -25,7 +25,7 @@ Current scope:
 - Request device list.
 - Subscribe to status updates.
 - Publish Home Assistant MQTT Discovery entities.
-- Group Home Assistant devices by Larnitech area/room by default.
+- Group all Larnitech entities under one Home Assistant device by default.
 - Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
 
@@ -73,3 +73,45 @@ publish_unsupported_devices: true
 ## Legal
 
 This project is written as a clean-room implementation. Do not copy code from existing bridges into this repository.
+
+
+## Device grouping modes
+
+Default mode:
+
+```yaml
+device_grouping: "bridge"
+prefix_entity_names_with_area: true
+```
+
+This creates one Home Assistant MQTT device named **Larnitech Smart House**. Entities are named with the room prefix, for example:
+
+```text
+Virtuvė · Salos šviestuvai
+Tėvų WC · WC spot
+Beno kambarys · LED
+```
+
+Alternative modes:
+
+```yaml
+device_grouping: "area"
+```
+
+Creates one Home Assistant device per Larnitech area/room.
+
+```yaml
+device_grouping: "entity"
+```
+
+Legacy mode: one Home Assistant device per Larnitech item.
+
+## Diagnostics
+
+When enabled:
+
+```yaml
+publish_module_diagnostics: true
+```
+
+The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.

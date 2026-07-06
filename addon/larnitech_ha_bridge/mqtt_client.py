@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
 
 from .config import BridgeConfig
-from .discovery import discovery_payload, discovery_topic, entity_component, normalize_state, slugify
+from .discovery import diagnostics_sensor_payload, discovery_payload, discovery_topic, entity_component, legacy_discovery_topic, normalize_state, slugify
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,12 +50,19 @@ class MqttBridgeClient:
 
         current_topics: set[str] = set()
         all_supported_topics: set[str] = set()
+        legacy_topics: set[str] = set()
         supported = 0
         skipped: list[dict[str, str | None]] = []
         unsupported: list[dict[str, str | None]] = []
 
+        # First pass: calculate current and legacy topics.
         for device in devices:
             topic = discovery_topic(
+                self.config.mqtt_discovery_prefix,
+                self.config.bridge_id,
+                device,
+            )
+            old_topic = legacy_discovery_topic(
                 self.config.mqtt_discovery_prefix,
                 self.config.bridge_id,
                 device,
@@ -62,6 +70,21 @@ class MqttBridgeClient:
 
             if topic and entity_component(device):
                 all_supported_topics.add(topic)
+            if old_topic and entity_component(device):
+                legacy_topics.add(old_topic)
+
+            if self.should_publish(device) and topic:
+                current_topics.add(topic)
+
+        self._cleanup_stale_discovery_topics(current_topics, all_supported_topics, legacy_topics)
+
+        # Second pass: publish new grouped discovery payloads.
+        for device in devices:
+            topic = discovery_topic(
+                self.config.mqtt_discovery_prefix,
+                self.config.bridge_id,
+                device,
+            )
 
             if not self.should_publish(device):
                 skipped.append(
@@ -78,6 +101,7 @@ class MqttBridgeClient:
                 self.config.bridge_id,
                 device,
                 grouping=self.config.device_grouping,
+                prefix_area=self.config.prefix_entity_names_with_area,
             )
 
             if topic is None or payload is None:
@@ -92,15 +116,12 @@ class MqttBridgeClient:
                 continue
 
             self.client.publish(topic, json.dumps(payload), retain=True)
-            current_topics.add(topic)
             supported += 1
 
             command_topic = payload.get("command_topic")
             if command_topic:
                 self._addr_by_command_topic[command_topic] = device.addr
                 self.client.subscribe(command_topic)
-
-        self._cleanup_stale_discovery_topics(current_topics, all_supported_topics)
 
         _LOGGER.info(
             "Published MQTT discovery for %s entities using device_grouping=%s",
@@ -124,8 +145,109 @@ class MqttBridgeClient:
                 retain=True,
             )
 
+        if self.config.publish_module_diagnostics:
+            diagnostic_topics = self.publish_module_diagnostics(devices, publishable, skipped, unsupported)
+            current_topics |= diagnostic_topics
+
         self._save_discovery_topics(current_topics)
         return publishable
+
+    def publish_module_diagnostics(
+        self,
+        devices: list[LarnitechDevice],
+        published_devices: list[LarnitechDevice],
+        skipped: list[dict[str, str | None]],
+        unsupported: list[dict[str, str | None]],
+    ) -> set[str]:
+        modules: dict[str, dict[str, object]] = {}
+
+        for device in devices:
+            if ":" not in device.addr:
+                continue
+
+            module_addr = device.addr.split(":", 1)[0]
+            raw = device.raw or {}
+            module = modules.setdefault(
+                module_addr,
+                {
+                    "module": module_addr,
+                    "cfgids": set(),
+                    "types": {},
+                    "areas": set(),
+                    "items": 0,
+                },
+            )
+
+            module["items"] = int(module["items"]) + 1
+
+            cfgid = raw.get("cfgid")
+            if cfgid is not None:
+                module["cfgids"].add(str(cfgid))
+
+            if device.type:
+                types = module["types"]
+                types[device.type] = int(types.get(device.type, 0)) + 1
+
+            if device.area:
+                module["areas"].add(device.area)
+
+        normalized_modules: list[dict[str, object]] = []
+        for module_addr in sorted(modules, key=lambda value: int(value) if value.isdigit() else value):
+            module = modules[module_addr]
+            cfgids = sorted(module["cfgids"])
+            areas = sorted(module["areas"])
+            normalized_modules.append(
+                {
+                    "module": module_addr,
+                    "model": f"cfgid {', '.join(cfgids)}" if cfgids else "unknown",
+                    "cfgids": cfgids,
+                    "areas": areas,
+                    "items": module["items"],
+                    "types": module["types"],
+                }
+            )
+
+        topics: set[str] = set()
+
+        discovery_suffix, payload = diagnostics_sensor_payload(
+            self.config.bridge_id,
+            "modules",
+            "Modules",
+        )
+        topic = f"{self.config.mqtt_discovery_prefix}/{discovery_suffix}"
+        self.client.publish(topic, json.dumps(payload), retain=True)
+        self.client.publish(f"{self.config.bridge_id}/diagnostics/modules/state", str(len(normalized_modules)), retain=True)
+        self.client.publish(
+            f"{self.config.bridge_id}/diagnostics/modules/attributes",
+            json.dumps({"modules": normalized_modules}),
+            retain=True,
+        )
+        topics.add(topic)
+
+        discovery_suffix, payload = diagnostics_sensor_payload(
+            self.config.bridge_id,
+            "published_entities",
+            "Published entities",
+        )
+        topic = f"{self.config.mqtt_discovery_prefix}/{discovery_suffix}"
+        self.client.publish(topic, json.dumps(payload), retain=True)
+        self.client.publish(f"{self.config.bridge_id}/diagnostics/published_entities/state", str(len(published_devices)), retain=True)
+        self.client.publish(
+            f"{self.config.bridge_id}/diagnostics/published_entities/attributes",
+            json.dumps(
+                {
+                    "published": len(published_devices),
+                    "skipped": len(skipped),
+                    "unsupported": len(unsupported),
+                    "device_grouping": self.config.device_grouping,
+                }
+            ),
+            retain=True,
+        )
+        topics.add(topic)
+
+        _LOGGER.info("Published module diagnostics for %s modules", len(normalized_modules))
+        return topics
 
     def should_publish(self, device: LarnitechDevice) -> bool:
         area = device.area or ""
@@ -175,18 +297,26 @@ class MqttBridgeClient:
         self,
         current_topics: set[str],
         all_supported_topics: set[str],
+        legacy_topics: set[str],
     ) -> None:
         previous_topics = self._load_discovery_topics()
 
         # Clear topics that used to exist but are no longer published.
-        # Also clear current-device topics that are now filtered out by v0.1.2 rules.
+        # v0.1.0-v0.1.2 used name-based object IDs and one device per entity.
+        # v0.1.3 migrates to address-only object IDs and area/bridge grouping.
         stale_topics = (previous_topics | all_supported_topics) - current_topics
+
+        if self.config.cleanup_legacy_mqtt:
+            stale_topics |= legacy_topics
 
         for topic in stale_topics:
             self.client.publish(topic, "", retain=True)
 
         if stale_topics:
-            _LOGGER.info("Cleared %s stale/filtered MQTT discovery topics", len(stale_topics))
+            _LOGGER.info("Cleared %s stale/legacy MQTT discovery topics", len(stale_topics))
+            # Give Home Assistant a short moment to process retained config removals
+            # before the new grouped discovery payloads arrive.
+            time.sleep(2)
 
     def _load_discovery_topics(self) -> set[str]:
         try:

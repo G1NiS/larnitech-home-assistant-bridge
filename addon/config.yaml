@@ -1,5 +1,5 @@
 name: "Larnitech Bridge for Home Assistant"
-version: "0.1.2"
+version: "0.1.4"
 slug: "larnitech_ha_bridge"
 description: "Unofficial Home Assistant bridge for Larnitech-compatible systems using API2 and MQTT Discovery"
 url: "https://github.com/G1NiS/larnitech-home-assistant-bridge"
@@ -21,7 +21,7 @@ options:
   mqtt_discovery_prefix: "homeassistant"
   bridge_id: "larnitech"
   log_level: "info"
-  device_grouping: "area"
+  device_grouping: "bridge"
   ignored_areas: []
   ignored_types: []
   hide_setup_area: true
@@ -29,6 +29,9 @@ options:
   publish_light_schemes: false
   publish_scripts: false
   publish_unsupported_devices: true
+  cleanup_legacy_mqtt: true
+  prefix_entity_names_with_area: true
+  publish_module_diagnostics: true
 
 schema:
   larnitech_host: "str"
@@ -51,3 +54,6 @@ schema:
   publish_light_schemes: "bool"
   publish_scripts: "bool"
   publish_unsupported_devices: "bool"
+  cleanup_legacy_mqtt: "bool"
+  prefix_entity_names_with_area: "bool"
+  publish_module_diagnostics: "bool"

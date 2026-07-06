@@ -9,12 +9,15 @@
   "mqtt_discovery_prefix": "homeassistant",
   "bridge_id": "larnitech",
   "log_level": "info",
-  "device_grouping": "area",
+  "device_grouping": "bridge",
   "ignored_areas": [],
   "ignored_types": [],
   "hide_setup_area": true,
   "hide_input_switches": true,
   "publish_light_schemes": false,
   "publish_scripts": false,
-  "publish_unsupported_devices": true
+  "publish_unsupported_devices": true,
+  "cleanup_legacy_mqtt": true,
+  "prefix_entity_names_with_area": true,
+  "publish_module_diagnostics": true
 }
