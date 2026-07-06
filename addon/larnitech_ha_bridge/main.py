@@ -67,6 +67,7 @@ async def run_bridge() -> None:
                 while True:
                     addr, payload, kind = await pending_commands.get()
                     device = devices_by_addr.get(addr)
+                    requeue = None
                     try:
                         status_payload = larnitech_status_for_command(device, payload, kind)
                         response = await command_api.set_status(addr, status_payload)
@@ -78,8 +79,15 @@ async def run_bridge() -> None:
                         logger.exception(
                             "Failed to set Larnitech status: addr=%s kind=%s payload=%s", addr, kind, payload
                         )
+                    except Exception:
+                        # Connection-level failure - the command never reached Larnitech, so put
+                        # it back on the queue to retry once the connection is re-established.
+                        requeue = (addr, payload, kind)
+                        raise
                     finally:
                         pending_commands.task_done()
+                        if requeue is not None:
+                            pending_commands.put_nowait(requeue)
             except asyncio.CancelledError:
                 raise
             except Exception:
