@@ -5,10 +5,11 @@ import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from .commands import CommandKind
 from .config import BridgeConfig
 from .discovery import (
     diagnostics_sensor_payload,
@@ -22,8 +23,6 @@ from .discovery import (
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
-
-CommandKind = Literal["state", "brightness", "press"]
 
 
 class MqttBridgeClient:
@@ -134,22 +133,7 @@ class MqttBridgeClient:
 
             self.client.publish(topic, json.dumps(payload), retain=True)
             supported += 1
-
-            command_topic = payload.get("command_topic")
-            if command_topic:
-                self._command_by_topic[command_topic] = (device.addr, "state")
-                self.client.subscribe(command_topic)
-
-            brightness_command_topic = payload.get("brightness_command_topic")
-            if brightness_command_topic:
-                self._command_by_topic[brightness_command_topic] = (device.addr, "brightness")
-                self.client.subscribe(brightness_command_topic)
-
-            if entity_component(device) == "button":
-                button_command_topic = payload.get("command_topic")
-                if button_command_topic:
-                    self._command_by_topic[button_command_topic] = (device.addr, "press")
-                    self.client.subscribe(button_command_topic)
+            self._subscribe_entity_commands(device, payload)
 
         _LOGGER.info(
             "Published MQTT discovery for %s entities using device_grouping=%s",
@@ -174,11 +158,43 @@ class MqttBridgeClient:
             )
 
         if self.config.publish_module_diagnostics:
-            diagnostic_topics = self.publish_module_diagnostics(devices, publishable, skipped, unsupported)
+            diagnostic_topics = self.publish_module_diagnostics(
+                devices, published_devices=publishable, skipped=skipped, unsupported=unsupported
+            )
             current_topics |= diagnostic_topics
 
         self._save_discovery_topics(current_topics)
         return publishable
+
+    def _subscribe_entity_commands(
+        self, device: LarnitechDevice, payload: dict[str, object]
+    ) -> None:
+        command_topic = payload.get("command_topic")
+        if isinstance(command_topic, str):
+            self._command_by_topic[command_topic] = (device.addr, "state")
+            self.client.subscribe(command_topic)
+
+        brightness_command_topic = payload.get("brightness_command_topic")
+        if isinstance(brightness_command_topic, str):
+            self._command_by_topic[brightness_command_topic] = (device.addr, "brightness")
+            self.client.subscribe(brightness_command_topic)
+
+        if entity_component(device) == "button":
+            button_command_topic = payload.get("command_topic")
+            if isinstance(button_command_topic, str):
+                self._command_by_topic[button_command_topic] = (device.addr, "press")
+                self.client.subscribe(button_command_topic)
+
+        climate_command_topics: dict[str, CommandKind] = {
+            "mode_command_topic": "mode",
+            "fan_mode_command_topic": "fan_mode",
+            "preset_mode_command_topic": "preset",
+        }
+        for payload_key, command_kind in climate_command_topics.items():
+            climate_command_topic = payload.get(payload_key)
+            if isinstance(climate_command_topic, str):
+                self._command_by_topic[climate_command_topic] = (device.addr, command_kind)
+                self.client.subscribe(climate_command_topic)
 
     def publish_module_diagnostics(
         self,
@@ -220,7 +236,9 @@ class MqttBridgeClient:
                 module["areas"].add(device.area)
 
         normalized_modules: list[dict[str, object]] = []
-        for module_addr in sorted(modules, key=lambda value: int(value) if value.isdigit() else value):
+        for module_addr in sorted(
+            modules, key=lambda value: int(value) if value.isdigit() else value
+        ):
             module = modules[module_addr]
             cfgids = sorted(module["cfgids"])
             areas = sorted(module["areas"])
@@ -244,7 +262,11 @@ class MqttBridgeClient:
         )
         topic = f"{self.config.mqtt_discovery_prefix}/{discovery_suffix}"
         self.client.publish(topic, json.dumps(payload), retain=True)
-        self.client.publish(f"{self.config.bridge_id}/diagnostics/modules/state", str(len(normalized_modules)), retain=True)
+        self.client.publish(
+            f"{self.config.bridge_id}/diagnostics/modules/state",
+            str(len(normalized_modules)),
+            retain=True,
+        )
         self.client.publish(
             f"{self.config.bridge_id}/diagnostics/modules/attributes",
             json.dumps({"modules": normalized_modules}),
@@ -259,7 +281,11 @@ class MqttBridgeClient:
         )
         topic = f"{self.config.mqtt_discovery_prefix}/{discovery_suffix}"
         self.client.publish(topic, json.dumps(payload), retain=True)
-        self.client.publish(f"{self.config.bridge_id}/diagnostics/published_entities/state", str(len(published_devices)), retain=True)
+        self.client.publish(
+            f"{self.config.bridge_id}/diagnostics/published_entities/state",
+            str(len(published_devices)),
+            retain=True,
+        )
         self.client.publish(
             f"{self.config.bridge_id}/diagnostics/published_entities/attributes",
             json.dumps(
@@ -279,6 +305,7 @@ class MqttBridgeClient:
 
     def should_publish(self, device: LarnitechDevice) -> bool:
         area = device.area or ""
+        component = entity_component(device)
 
         if area in self.config.ignored_areas:
             return False
@@ -286,7 +313,7 @@ class MqttBridgeClient:
         if device.type in self.config.ignored_types:
             return False
 
-        if self.config.hide_setup_area and area.lower() == "setup":
+        if self.config.hide_setup_area and area.lower() == "setup" and component != "climate":
             return False
 
         if self.config.hide_input_switches and device.type == "switch":
@@ -298,7 +325,7 @@ class MqttBridgeClient:
         if device.type == "script" and not self.config.publish_scripts:
             return False
 
-        return entity_component(device) is not None
+        return component is not None
 
     def publish_initial_status(self, devices: list[LarnitechDevice]) -> None:
         published = 0
@@ -327,6 +354,111 @@ class MqttBridgeClient:
             level = self._extract_level(status.value)
             if level is not None:
                 self.client.publish(f"{topic_base}/brightness/state", str(level), retain=True)
+
+        if device and device.type == "fancoil":
+            self._publish_fancoil_status(topic_base, status)
+
+    def _publish_fancoil_status(self, topic_base: str, status: DeviceStatus) -> None:
+        status_data = self._status_dict(status)
+
+        mode = self._extract_fancoil_mode(status_data)
+        if mode:
+            self.client.publish(f"{topic_base}/mode/state", mode, retain=True)
+
+        current_temperature = self._extract_numeric(
+            status_data,
+            "current",
+            "current_temperature",
+            "temperature",
+            "t_cur",
+            "t-current",
+        )
+        if current_temperature is not None:
+            self.client.publish(
+                f"{topic_base}/current_temperature/state",
+                str(current_temperature),
+                retain=True,
+            )
+
+        target_temperature = self._extract_numeric(
+            status_data,
+            "target",
+            "target_temperature",
+            "setpoint",
+            "t_set",
+            "t-set",
+            "temperature-level",
+        )
+        if target_temperature is not None:
+            self.client.publish(
+                f"{topic_base}/target_temperature/state",
+                str(target_temperature),
+                retain=True,
+            )
+
+        fan_level = self._extract_numeric(status_data, "fan", "fan_level", "level")
+        if fan_level is not None:
+            self.client.publish(
+                f"{topic_base}/fan_mode/state",
+                self._fan_mode_from_level(fan_level),
+                retain=True,
+            )
+
+        preset = status_data.get("automation") or status_data.get("preset")
+        if isinstance(preset, str) and preset.strip():
+            self.client.publish(f"{topic_base}/preset/state", preset.strip(), retain=True)
+
+        self.client.publish(f"{topic_base}/attributes", json.dumps(status.raw), retain=True)
+
+    @staticmethod
+    def _status_dict(status: DeviceStatus) -> dict[str, Any]:
+        if isinstance(status.value, dict):
+            return status.value
+
+        raw_status = status.raw.get("status")
+        if isinstance(raw_status, dict):
+            return raw_status
+
+        return status.raw
+
+    @staticmethod
+    def _extract_fancoil_mode(status_data: dict[str, Any]) -> str | None:
+        state = str(status_data.get("state", "")).lower().strip()
+        if state in {"off", "0", "false"}:
+            return "off"
+
+        mode = str(status_data.get("mode", "")).lower().strip()
+        if mode in {"heat", "cool"}:
+            return mode
+
+        if state in {"on", "1", "true"}:
+            return "heat"
+
+        return None
+
+    @staticmethod
+    def _extract_numeric(status_data: dict[str, Any], *keys: str) -> float | None:
+        for key in keys:
+            value = status_data.get(key)
+            if value is None:
+                continue
+            try:
+                return round(float(value), 2)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _fan_mode_from_level(level: float) -> str:
+        if level <= 0:
+            return "off"
+        if level <= 33:
+            return "low"
+        if level <= 66:
+            return "medium"
+        if level < 100:
+            return "high"
+        return "max"
 
     @staticmethod
     def _extract_level(value) -> int | None:
