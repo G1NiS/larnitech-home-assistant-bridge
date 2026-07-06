@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.6.
+Early MVP / debug version. Current add-on version: 0.1.7.
 
 Current scope:
 
@@ -148,3 +148,12 @@ Both the status and command WebSocket connections now reconnect automatically wi
 exponential backoff (5s up to 60s) if the connection to Larnitech drops. Previously a
 dropped connection silently stopped status updates and/or commands until the add-on
 was restarted manually.
+
+## 0.1.7 faster, lossless reconnects
+
+- A dropped connection now reconnects immediately instead of always waiting out the
+  backoff delay - the delay only applies when the reconnect attempt itself fails, so a
+  one-off blip recovers as fast as a fresh WebSocket handshake instead of stalling for
+  5+ seconds.
+- A command that was in flight when the command connection died is put back on the
+  queue and retried once reconnected, instead of being silently dropped.
