@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.9.
+Early MVP / debug version. Current add-on version: 0.1.10.
 
 Current scope:
 
@@ -169,3 +169,10 @@ was restarted manually.
 - Maps fancoil `automations` to Home Assistant preset modes.
 - Adds basic fancoil commands for HVAC mode, fan mode and preset mode.
 - Keeps target temperature command disabled until real API behaviour is confirmed.
+
+## 0.1.10 Larnitech WebSocket keepalive fix
+
+- Disables Python WebSocket protocol pings to avoid Larnitech `keepalive ping timeout`
+  disconnect loops every ~40 seconds.
+- Keeps reconnect logic in place for real connection/request failures.
+- Adds a short close timeout so a broken socket does not block reconnecting.
