@@ -9,7 +9,7 @@ COPY larnitech_ha_bridge ./larnitech_ha_bridge
 
 RUN pip3 install . --break-system-packages --no-cache-dir
 
-COPY addon/run.sh /run.sh
+COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
 CMD ["/run.sh"]

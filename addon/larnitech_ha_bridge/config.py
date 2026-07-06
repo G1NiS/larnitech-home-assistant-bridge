@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 class BridgeConfig(BaseModel):
-    larnitech_host: str = Field(default="192.168.32.121")
+    larnitech_host: str = Field(default="192.168.xxx.xxx")
     larnitech_port: int = Field(default=2041)
     larnitech_api_key: str
 
@@ -40,7 +40,7 @@ def load_config() -> BridgeConfig:
         raw = json.loads(local_options.read_text(encoding="utf-8"))
     else:
         raw = {
-            "larnitech_host": os.getenv("LARNITECH_HOST", "192.168.32.121"),
+            "larnitech_host": os.getenv("LARNITECH_HOST", "192.168.xxx.xxx"),
             "larnitech_port": int(os.getenv("LARNITECH_PORT", "2041")),
             "larnitech_api_key": os.getenv("LARNITECH_API_KEY", ""),
             "mqtt_host": os.getenv("MQTT_HOST", "core-mosquitto"),

@@ -20,12 +20,6 @@ dev = [
 [project.scripts]
 larnitech-ha-bridge = "larnitech_ha_bridge.main:main"
 
-[tool.setuptools]
-package-dir = {"" = "addon"}
-
-[tool.setuptools.packages.find]
-where = ["addon"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
