@@ -148,7 +148,13 @@ def test_command_payload_for_dimmer_brightness():
 def test_command_payload_for_fancoil_mode_and_fan():
     from larnitech_ha_bridge.commands import larnitech_status_for_command
 
-    device = LarnitechDevice(addr="415:52", name="Miegamasis", type="fancoil", area="Setup", raw={})
+    device = LarnitechDevice(
+        addr="415:52",
+        name="Miegamasis",
+        type="fancoil",
+        area="Setup",
+        raw={},
+    )
     assert larnitech_status_for_command(device, "heat", "mode") == {
         "state": "on",
         "mode": "heat",
