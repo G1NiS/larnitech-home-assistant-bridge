@@ -21,8 +21,19 @@ class BridgeConfig(BaseModel):
 
     bridge_id: str = Field(default="larnitech")
     log_level: Literal["debug", "info", "warning", "error"] = "info"
+
+    # Home Assistant device grouping:
+    # - area: one HA device per Larnitech area/room, similar to Hikvision camera grouping
+    # - bridge: one HA device for the whole Larnitech system, similar to Paradox
+    # - entity: one HA device per Larnitech item, legacy v0.1.1 behavior
+    device_grouping: Literal["area", "bridge", "entity"] = "area"
+
     ignored_areas: list[str] = Field(default_factory=list)
     ignored_types: list[str] = Field(default_factory=list)
+    hide_setup_area: bool = True
+    hide_input_switches: bool = True
+    publish_light_schemes: bool = False
+    publish_scripts: bool = False
     publish_unsupported_devices: bool = True
 
     @property
@@ -50,6 +61,7 @@ def load_config() -> BridgeConfig:
             "mqtt_discovery_prefix": os.getenv("MQTT_DISCOVERY_PREFIX", "homeassistant"),
             "bridge_id": os.getenv("BRIDGE_ID", "larnitech"),
             "log_level": os.getenv("LOG_LEVEL", "info"),
+            "device_grouping": os.getenv("DEVICE_GROUPING", "area"),
         }
 
     if not raw.get("larnitech_api_key"):

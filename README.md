@@ -17,14 +17,16 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.1.
+Early MVP / debug version. Current add-on version: 0.1.2.
 
 Current scope:
 
 - Connect to Larnitech API2 WebSocket.
 - Request device list.
 - Subscribe to status updates.
-- Publish basic Home Assistant MQTT Discovery entities.
+- Publish Home Assistant MQTT Discovery entities.
+- Group Home Assistant devices by Larnitech area/room by default.
+- Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
 
 ## Architecture

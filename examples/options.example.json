@@ -8,8 +8,13 @@
   "mqtt_password": "YOUR_MQTT_PASSWORD",
   "mqtt_discovery_prefix": "homeassistant",
   "bridge_id": "larnitech",
-  "log_level": "debug",
+  "log_level": "info",
+  "device_grouping": "area",
   "ignored_areas": [],
   "ignored_types": [],
+  "hide_setup_area": true,
+  "hide_input_switches": true,
+  "publish_light_schemes": false,
+  "publish_scripts": false,
   "publish_unsupported_devices": true
 }

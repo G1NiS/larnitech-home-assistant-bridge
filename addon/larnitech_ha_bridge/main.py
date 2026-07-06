@@ -39,7 +39,7 @@ async def run_bridge() -> None:
     async def command_worker() -> None:
         while True:
             addr, payload = await pending_commands.get()
-            status = payload in {"ON", "1", "true", "True"}
+            status = payload if payload == "PRESS" else payload in {"ON", "1", "true", "True"}
             try:
                 await api.set_status(addr, status)
             except Exception:
@@ -56,7 +56,8 @@ async def run_bridge() -> None:
             and (device.area or "") not in config.ignored_areas
         ]
 
-        mqtt_client.publish_discovery(filtered_devices)
+        published_devices = mqtt_client.publish_discovery(filtered_devices)
+        mqtt_client.publish_initial_status(published_devices)
         await api.subscribe_status()
 
         async for status in api.status_events():
