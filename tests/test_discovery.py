@@ -51,27 +51,28 @@ def test_illumination_sensor_maps_to_sensor():
     assert payload["unit_of_measurement"] == "lx"
 
 
-def test_fancoil_maps_to_climate():
+def test_fancoil_maps_to_fan():
     device = LarnitechDevice(
         addr="415:52",
         name="Miegamasis",
         type="fancoil",
         area="Setup",
         raw={
-            "automations": ["Mode", "Comfort", "Off", "Eco", "Fast"],
-            "status": {"state": "on", "current": 23.1, "fan": 33.2, "mode": "heat"},
+            "status": {"state": "on", "fan": 33.2},
         },
     )
 
-    assert entity_component(device) == "climate"
+    assert entity_component(device) == "fan"
     payload = discovery_payload("larnitech", device)
 
     assert payload is not None
-    assert payload["mode_command_topic"] == "larnitech/415_52/mode/set"
-    assert payload["mode_state_topic"] == "larnitech/415_52/mode/state"
-    assert payload["current_temperature_topic"] == "larnitech/415_52/current_temperature/state"
-    assert payload["fan_mode_command_topic"] == "larnitech/415_52/fan_mode/set"
-    assert payload["preset_modes"] == ["Mode", "Comfort", "Off", "Eco", "Fast"]
+    assert payload["command_topic"] == "larnitech/415_52/set"
+    assert payload["state_topic"] == "larnitech/415_52/state"
+    assert payload["preset_mode_command_topic"] == "larnitech/415_52/preset_mode/set"
+    assert payload["preset_mode_state_topic"] == "larnitech/415_52/preset_mode/state"
+    assert payload["preset_modes"] == ["off", "low", "medium", "high"]
+    assert "current_temperature_topic" not in payload
+    assert "mode_command_topic" not in payload
 
 
 def test_normalize_dict_state():
@@ -145,7 +146,7 @@ def test_command_payload_for_dimmer_brightness():
     assert larnitech_status_for_command(device, "42", "brightness") == {"level": 42}
 
 
-def test_command_payload_for_fancoil_mode_and_fan():
+def test_command_payload_for_fancoil_three_speeds():
     from larnitech_ha_bridge.commands import larnitech_status_for_command
 
     device = LarnitechDevice(
@@ -155,12 +156,11 @@ def test_command_payload_for_fancoil_mode_and_fan():
         area="Setup",
         raw={},
     )
-    assert larnitech_status_for_command(device, "heat", "mode") == "0x01"
-    assert larnitech_status_for_command(device, "cool", "mode") == "0x01"
-    assert larnitech_status_for_command(device, "off", "mode") == "0x00"
-    assert larnitech_status_for_command(device, "medium", "fan_mode") == "0x017D"
-    assert larnitech_status_for_command(device, "Eco", "preset") == {
-        "state": "on",
-        "automation": "Eco",
-    }
-    assert larnitech_status_for_command(device, "none", "preset") == "0x01"
+    assert larnitech_status_for_command(device, "OFF", "state") == "0x00"
+    assert larnitech_status_for_command(device, "ON", "state") == "0x01"
+    assert larnitech_status_for_command(device, "low", "fan_mode") == "0x0155"
+    assert larnitech_status_for_command(device, "medium", "fan_mode") == "0x01AA"
+    assert larnitech_status_for_command(device, "high", "fan_mode") == "0x01FA"
+    assert larnitech_status_for_command(device, "1", "preset") == "0x0155"
+    assert larnitech_status_for_command(device, "2", "preset") == "0x01AA"
+    assert larnitech_status_for_command(device, "3", "preset") == "0x01FA"
