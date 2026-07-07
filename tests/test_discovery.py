@@ -68,6 +68,10 @@ def test_fancoil_maps_to_fan_by_default():
     assert payload["state_topic"] == "larnitech/415_52/state"
     assert payload["preset_mode_command_topic"] == "larnitech/415_52/preset_mode/set"
     assert payload["preset_mode_state_topic"] == "larnitech/415_52/preset_mode/state"
+    assert payload["percentage_command_topic"] == "larnitech/415_52/preset_mode/set"
+    assert payload["percentage_state_topic"] == "larnitech/415_52/preset_mode/state"
+    assert payload["speed_range_min"] == 1
+    assert payload["speed_range_max"] == 3
     assert payload["preset_modes"] == ["off", "low", "medium", "high"]
     assert "current_temperature_topic" not in payload
     assert "mode_command_topic" not in payload
@@ -186,3 +190,6 @@ def test_command_payload_for_fancoil_three_speeds():
     assert larnitech_status_for_command(device, "1", "preset") == "0x0155"
     assert larnitech_status_for_command(device, "2", "preset") == "0x01AA"
     assert larnitech_status_for_command(device, "3", "preset") == "0x01FA"
+    assert larnitech_status_for_command(device, "1", "fan_mode") == "0x0155"
+    assert larnitech_status_for_command(device, "2", "fan_mode") == "0x01AA"
+    assert larnitech_status_for_command(device, "3", "fan_mode") == "0x01FA"
