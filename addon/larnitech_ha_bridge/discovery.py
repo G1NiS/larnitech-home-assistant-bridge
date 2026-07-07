@@ -236,6 +236,14 @@ def _fan_discovery_payload(topic: str) -> dict[str, Any]:
         "payload_off": "OFF",
         "state_on": "ON",
         "state_off": "OFF",
+        # Home Assistant fan speed UI is driven by percentage topics. With a 1..3
+        # speed range Home Assistant publishes speed 1, 2 or 3 to percentage_command_topic.
+        "percentage_state_topic": f"{topic}/percentage/state",
+        "percentage_command_topic": f"{topic}/percentage/set",
+        "percentage_value_template": "{{ value | int }}",
+        "speed_range_min": 1,
+        "speed_range_max": 3,
+        # Keep named presets as a secondary control path for dashboards/cards that expose presets.
         "preset_modes": ["off", "low", "medium", "high"],
         "preset_mode_state_topic": f"{topic}/preset_mode/state",
         "preset_mode_command_topic": f"{topic}/preset_mode/set",
@@ -319,37 +327,4 @@ def diagnostics_sensor_payload(
         "entity_category": "diagnostic",
         "device": bridge_device_info(bridge_id),
     }
-    discovery_topic_value = f"sensor/{unique_id}/config"
-    return discovery_topic_value, discovery
-
-
-def normalize_state(value: Any) -> str:
-    if isinstance(value, dict):
-        if "state" in value:
-            return normalize_state(value["state"])
-        if "value" in value:
-            return normalize_state(value["value"])
-        if "level" in value:
-            try:
-                return "ON" if float(value["level"]) > 0 else "OFF"
-            except (TypeError, ValueError):
-                return str(value["level"])
-        return str(value)
-
-    if isinstance(value, bool):
-        return "ON" if value else "OFF"
-
-    if isinstance(value, (int, float)):
-        if value in (0, 1):
-            return "ON" if value == 1 else "OFF"
-        return str(round(value, 2))
-
-    if isinstance(value, str):
-        lowered = value.lower().strip()
-        if lowered in {"1", "true", "on", "open", "opened", "active", "motion"}:
-            return "ON"
-        if lowered in {"0", "false", "off", "closed", "inactive", "clear"}:
-            return "OFF"
-        return value
-
-    return str(value)
+    return f"sensor/{unique_id}/config", discovery
