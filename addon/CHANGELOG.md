@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.15 - 2026-07-08
+
+### Fixed
+
+- Fixed fancoil speed control through Home Assistant MQTT fan percentage topics.
+- Separated numeric fan speed percentage topics from named preset mode topics:
+  - `percentage/set` now receives Home Assistant numeric speed commands `1`, `2`, `3`.
+  - `preset_mode/set` still receives named commands `off`, `low`, `medium`, `high`.
+- Subscribed the bridge to both fancoil speed command paths so both Home Assistant speed buttons and preset controls reach the Larnitech API2 command handler.
+- Published numeric fancoil speed state to `percentage/state` and named speed state to `preset_mode/state`.
+- Kept the existing Larnitech fancoil command mapping:
+  - `off` -> `0x00`
+  - `low` / speed 1 -> `0x0155`
+  - `medium` / speed 2 -> `0x01AA`
+  - `high` / speed 3 -> `0x01FA`
+
+### Notes
+
+- TLS connection, Server access connection and MQTT bridge research are intentionally not included in this release.
+- This release keeps the documented API2 key connection as the only active Larnitech connection method.
+
 ## 0.1.14 - 2026-07-07
 
 ### Fixed
