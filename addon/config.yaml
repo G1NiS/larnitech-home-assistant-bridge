@@ -1,5 +1,5 @@
 name: "Larnitech Bridge for Home Assistant"
-version: "0.1.12"
+version: "0.1.13"
 slug: "larnitech_ha_bridge"
 description: "Unofficial Home Assistant bridge for Larnitech-compatible systems using API2 and MQTT Discovery"
 url: "https://github.com/G1NiS/larnitech-home-assistant-bridge"
@@ -22,6 +22,7 @@ options:
   bridge_id: "larnitech"
   log_level: "info"
   device_grouping: "bridge"
+  fancoil_entity_mode: "fan"
   ignored_areas: []
   ignored_types: []
   hide_setup_area: true
@@ -45,6 +46,7 @@ schema:
   bridge_id: "str"
   log_level: "list(debug|info|warning|error)"
   device_grouping: "list(area|bridge|entity)"
+  fancoil_entity_mode: "list(fan|climate)"
   ignored_areas:
     - "str?"
   ignored_types:
