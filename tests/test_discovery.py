@@ -51,15 +51,13 @@ def test_illumination_sensor_maps_to_sensor():
     assert payload["unit_of_measurement"] == "lx"
 
 
-def test_fancoil_maps_to_fan():
+def test_fancoil_maps_to_fan_by_default():
     device = LarnitechDevice(
         addr="415:52",
         name="Miegamasis",
         type="fancoil",
         area="Setup",
-        raw={
-            "status": {"state": "on", "fan": 33.2},
-        },
+        raw={"status": {"state": "on", "fan": 33.2}},
     )
 
     assert entity_component(device) == "fan"
@@ -73,6 +71,30 @@ def test_fancoil_maps_to_fan():
     assert payload["preset_modes"] == ["off", "low", "medium", "high"]
     assert "current_temperature_topic" not in payload
     assert "mode_command_topic" not in payload
+
+
+def test_fancoil_can_map_to_climate_when_configured():
+    device = LarnitechDevice(
+        addr="415:52",
+        name="Miegamasis",
+        type="fancoil",
+        area="Setup",
+        raw={
+            "automations": ["Mode", "Comfort", "Off", "Eco", "Fast"],
+            "status": {"state": "on", "current": 23.1, "fan": 33.2, "mode": "heat"},
+        },
+    )
+
+    assert entity_component(device, fancoil_entity_mode="climate") == "climate"
+    payload = discovery_payload("larnitech", device, fancoil_entity_mode="climate")
+
+    assert payload is not None
+    assert payload["mode_command_topic"] == "larnitech/415_52/mode/set"
+    assert payload["mode_state_topic"] == "larnitech/415_52/mode/state"
+    assert payload["current_temperature_topic"] == "larnitech/415_52/current_temperature/state"
+    assert payload["fan_mode_command_topic"] == "larnitech/415_52/fan_mode/set"
+    assert payload["fan_modes"] == ["off", "low", "medium", "high"]
+    assert payload["preset_modes"] == ["Mode", "Comfort", "Off", "Eco", "Fast"]
 
 
 def test_normalize_dict_state():
