@@ -155,16 +155,12 @@ def test_command_payload_for_fancoil_mode_and_fan():
         area="Setup",
         raw={},
     )
-    assert larnitech_status_for_command(device, "heat", "mode") == {
-        "state": "on",
-        "mode": "heat",
-    }
-    assert larnitech_status_for_command(device, "off", "mode") == {"state": "off"}
-    assert larnitech_status_for_command(device, "medium", "fan_mode") == {
-        "state": "on",
-        "fan": 50,
-    }
+    assert larnitech_status_for_command(device, "heat", "mode") == "0x01"
+    assert larnitech_status_for_command(device, "cool", "mode") == "0x01"
+    assert larnitech_status_for_command(device, "off", "mode") == "0x00"
+    assert larnitech_status_for_command(device, "medium", "fan_mode") == "0x017D"
     assert larnitech_status_for_command(device, "Eco", "preset") == {
         "state": "on",
         "automation": "Eco",
     }
+    assert larnitech_status_for_command(device, "none", "preset") == "0x01"
