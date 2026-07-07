@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.11.
+Early MVP / debug version. Current add-on version: 0.1.12.
 
 Current scope:
 
@@ -28,7 +28,7 @@ Current scope:
 - Group all Larnitech entities under one Home Assistant device by default.
 - Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
-- Publish Larnitech fancoils as Home Assistant climate entities.
+- Publish Larnitech fancoils as Home Assistant fan entities with 3 speeds.
 
 ## Architecture
 
@@ -161,14 +161,9 @@ was restarted manually.
 
 ## 0.1.9 fancoil climate support
 
-- Adds `type="fancoil"` support as Home Assistant MQTT `climate` entities.
-- Publishes fancoil HVAC mode, current temperature, target temperature when available,
-  fan mode and raw attributes.
-- Keeps fancoils visible even when Larnitech reports them under the internal `Setup`
-  area while `hide_setup_area: true` is enabled.
-- Maps fancoil `automations` to Home Assistant preset modes.
-- Adds basic fancoil commands for HVAC mode, fan mode and preset mode.
-- Keeps target temperature command disabled until real API behaviour is confirmed.
+- Adds initial `type="fancoil"` support as Home Assistant MQTT `climate` entities.
+- This was later replaced because the real installation uses fancoils as 3-speed fans;
+  heating/cooling is handled by Nibe.
 
 ## 0.1.10 Larnitech WebSocket keepalive fix
 
@@ -182,10 +177,17 @@ was restarted manually.
 - Changes fancoil HVAC mode and fan commands from JSON objects to Larnitech-style hex
   status values.
 - `off` sends `0x00`.
-- `heat` and `cool` currently send `0x01` because public Larnitech fancoil command
-  documentation only confirms direct off/on byte commands; heat/cool profile mapping
-  still needs validation against a real installation.
 - Fan mode sends two-byte commands: first byte is on/off, second byte is fancoil fan
   power scaled to the Larnitech 0..250 range.
-- Keeps preset/profile commands as name-based automation payloads because Larnitech
-  API2 accepts those names and returns success for them.
+
+## 0.1.12 fancoils as 3-speed fan entities
+
+- Changes `type="fancoil"` from Home Assistant `climate` to Home Assistant `fan`.
+- Removes fake fancoil temperature and heat/cool mode topics.
+- Publishes fancoil speed as fan preset mode: `off`, `low`, `medium`, `high`.
+- Maps real 3-speed commands:
+  - `off` -> `0x00`
+  - `low` / speed 1 -> `0x0155`
+  - `medium` / speed 2 -> `0x01AA`
+  - `high` / speed 3 -> `0x01FA`
+- Clears retained MQTT climate discovery topics from previous fancoil versions.
