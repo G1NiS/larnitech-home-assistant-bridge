@@ -1,3 +1,5 @@
 [project]
 name = "larnitech-ha-bridge"
 version = "0.1.14"
+description = "Home Assistant bridge for Larnitech-compatible systems using MQTT Discovery"
+requires-python = ">=3.12"
