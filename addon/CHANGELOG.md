@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.14 - 2026-07-07
+
+### Fixed
+
+- Added Home Assistant MQTT fan percentage speed discovery for fancoils.
+- Reused the fancoil preset command topic for percentage speed control so Home Assistant speed buttons publish to an already subscribed command topic.
+- Kept the 3-speed mapping:
+  - `off` -> `0x00`
+  - `low` / speed 1 -> `0x0155`
+  - `medium` / speed 2 -> `0x01AA`
+  - `high` / speed 3 -> `0x01FA`
+
 ## 0.1.13 - 2026-07-07
 
 ### Added
