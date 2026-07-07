@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.14.
+Early MVP / debug version. Current add-on version: 0.1.15.
 
 Current scope:
 
@@ -127,7 +127,7 @@ medium  -> 0x01AA
 high    -> 0x01FA
 ```
 
-Fan speed control is exposed through Home Assistant MQTT fan percentage speed topics using speed range `1..3`. The same command topic is also reused for named presets so both UI speed control and preset buttons reach the Larnitech command handler.
+Fan speed control is exposed through Home Assistant MQTT fan percentage speed topics using speed range `1..3`. Numeric speed commands are received on `percentage/set`. Named dashboard/card presets are still received on `preset_mode/set`, so both UI speed controls and preset buttons reach the Larnitech command handler.
 
 Alternative mode for pure-Larnitech installations:
 
@@ -146,6 +146,14 @@ publish_module_diagnostics: true
 ```
 
 The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
+
+## 0.1.15 fancoil fan speed control fix
+
+- Separates numeric fan percentage topics from named preset topics.
+- Subscribes the bridge to both `percentage/set` and `preset_mode/set` for fancoils.
+- Publishes numeric speed state to `percentage/state` and named speed state to `preset_mode/state`.
+- Keeps the documented API2 key connection as the only active Larnitech connection method.
+- Does not include TLS, Server access or MQTT bridge research.
 
 ## 0.1.14 fancoil fan speed control
 
