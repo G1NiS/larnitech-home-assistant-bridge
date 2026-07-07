@@ -158,7 +158,8 @@ class MqttBridgeClient:
             self._subscribe_entity_commands(device, payload)
 
         _LOGGER.info(
-            "Published MQTT discovery for %s entities using device_grouping=%s, fancoil_entity_mode=%s",
+            "Published MQTT discovery for %s entities using "
+            "device_grouping=%s, fancoil_entity_mode=%s",
             supported,
             self.config.device_grouping,
             self.config.fancoil_entity_mode,
@@ -211,10 +212,14 @@ class MqttBridgeClient:
                 self.client.subscribe(button_command_topic)
 
         if component == "fan":
-            preset_mode_command_topic = payload.get("preset_mode_command_topic")
-            if isinstance(preset_mode_command_topic, str):
-                self._command_by_topic[preset_mode_command_topic] = (device.addr, "fan_mode")
-                self.client.subscribe(preset_mode_command_topic)
+            fan_command_topics = (
+                payload.get("preset_mode_command_topic"),
+                payload.get("percentage_command_topic"),
+            )
+            for fan_command_topic in fan_command_topics:
+                if isinstance(fan_command_topic, str):
+                    self._command_by_topic[fan_command_topic] = (device.addr, "fan_mode")
+                    self.client.subscribe(fan_command_topic)
             return
 
         if component == "climate":
@@ -407,9 +412,15 @@ class MqttBridgeClient:
         )
 
         if fan_level is not None:
+            fan_speed = self._fan_speed_from_level(fan_level)
+            self.client.publish(
+                f"{topic_base}/percentage/state",
+                str(fan_speed),
+                retain=True,
+            )
             self.client.publish(
                 f"{topic_base}/preset_mode/state",
-                self._fan_preset_from_level(fan_level),
+                self._fan_preset_from_speed(fan_speed),
                 retain=True,
             )
 
@@ -517,12 +528,32 @@ class MqttBridgeClient:
         return None
 
     @staticmethod
-    def _fan_preset_from_level(level: float) -> str:
+    def _fan_speed_from_level(level: float) -> int:
         if level <= 0:
-            return "off"
+            return 0
+        if level > 100:
+            if level <= 125:
+                return 1
+            if level <= 210:
+                return 2
+            return 3
         if level <= 40:
-            return "low"
+            return 1
         if level <= 75:
+            return 2
+        return 3
+
+    @classmethod
+    def _fan_preset_from_level(cls, level: float) -> str:
+        return cls._fan_preset_from_speed(cls._fan_speed_from_level(level))
+
+    @staticmethod
+    def _fan_preset_from_speed(speed: int) -> str:
+        if speed <= 0:
+            return "off"
+        if speed == 1:
+            return "low"
+        if speed == 2:
             return "medium"
         return "high"
 
@@ -593,5 +624,11 @@ class MqttBridgeClient:
             return
 
         addr, kind = command
-        _LOGGER.info("MQTT command: addr=%s kind=%s payload=%s", addr, kind, payload)
+        _LOGGER.info(
+            "MQTT command: topic=%s addr=%s kind=%s payload=%s",
+            message.topic,
+            addr,
+            kind,
+            payload,
+        )
         self.command_callback(addr, payload, kind)
