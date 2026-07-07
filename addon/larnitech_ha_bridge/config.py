@@ -28,6 +28,11 @@ class BridgeConfig(BaseModel):
     # - entity: one HA device per Larnitech item, legacy v0.1.1 behavior
     device_grouping: Literal["area", "bridge", "entity"] = "bridge"
 
+    # Fancoil entity model:
+    # - fan: universal safe default when heat/cool is controlled outside Larnitech
+    # - climate: expose Larnitech fancoils as climate devices for pure-Larnitech installations
+    fancoil_entity_mode: Literal["fan", "climate"] = "fan"
+
     ignored_areas: list[str] = Field(default_factory=list)
     ignored_types: list[str] = Field(default_factory=list)
     hide_setup_area: bool = True
@@ -65,6 +70,7 @@ def load_config() -> BridgeConfig:
             "bridge_id": os.getenv("BRIDGE_ID", "larnitech"),
             "log_level": os.getenv("LOG_LEVEL", "info"),
             "device_grouping": os.getenv("DEVICE_GROUPING", "bridge"),
+            "fancoil_entity_mode": os.getenv("FANCOIL_ENTITY_MODE", "fan"),
         }
 
     if not raw.get("larnitech_api_key"):
