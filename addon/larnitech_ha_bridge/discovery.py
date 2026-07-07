@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from .models import LarnitechDevice
 
+FancoilEntityMode = Literal["fan", "climate"]
+
 
 SUPPORTED_TYPES = {
     "lamp": "light",
@@ -18,9 +20,6 @@ SUPPORTED_TYPES = {
     "leak-sensor": "binary_sensor",
     "valve": "switch",
     "valve-heating": "switch",
-    # Larnitech fancoils in this installation are 3-speed fan coils only.
-    # Heating/cooling is handled by Nibe, so do not expose them as climate devices.
-    "fancoil": "fan",
     "light-scheme": "button",
     "script": "button",
     # Keep switch supported technically, but filter physical input switches by default in config.
@@ -35,7 +34,12 @@ def slugify(value: str) -> str:
     return value or "unknown"
 
 
-def entity_component(device: LarnitechDevice) -> str | None:
+def entity_component(
+    device: LarnitechDevice,
+    fancoil_entity_mode: FancoilEntityMode = "fan",
+) -> str | None:
+    if device.type == "fancoil":
+        return fancoil_entity_mode
     return SUPPORTED_TYPES.get(device.type)
 
 
@@ -55,8 +59,13 @@ def base_topic(bridge_id: str, device: LarnitechDevice) -> str:
     return f"{bridge_id}/{slugify(device.addr)}"
 
 
-def discovery_topic(prefix: str, bridge_id: str, device: LarnitechDevice) -> str | None:
-    component = entity_component(device)
+def discovery_topic(
+    prefix: str,
+    bridge_id: str,
+    device: LarnitechDevice,
+    fancoil_entity_mode: FancoilEntityMode = "fan",
+) -> str | None:
+    component = entity_component(device, fancoil_entity_mode=fancoil_entity_mode)
     if component is None:
         return None
     return component_discovery_topic(prefix, bridge_id, device, component)
@@ -71,8 +80,13 @@ def component_discovery_topic(
     return f"{prefix}/{component}/{object_id(bridge_id, device)}/config"
 
 
-def legacy_discovery_topic(prefix: str, bridge_id: str, device: LarnitechDevice) -> str | None:
-    component = entity_component(device)
+def legacy_discovery_topic(
+    prefix: str,
+    bridge_id: str,
+    device: LarnitechDevice,
+    fancoil_entity_mode: FancoilEntityMode = "fan",
+) -> str | None:
+    component = entity_component(device, fancoil_entity_mode=fancoil_entity_mode)
     if component is None:
         return None
     return f"{prefix}/{component}/{legacy_object_id(bridge_id, device)}/config"
@@ -130,8 +144,9 @@ def discovery_payload(
     device: LarnitechDevice,
     grouping: Literal["area", "bridge", "entity"] = "bridge",
     prefix_area: bool = True,
+    fancoil_entity_mode: FancoilEntityMode = "fan",
 ) -> dict[str, Any] | None:
-    component = entity_component(device)
+    component = entity_component(device, fancoil_entity_mode=fancoil_entity_mode)
     if component is None:
         return None
 
@@ -145,6 +160,10 @@ def discovery_payload(
 
     if component == "fan":
         payload.update(_fan_discovery_payload(topic))
+        return payload
+
+    if component == "climate":
+        payload.update(_climate_discovery_payload(topic, device))
         return payload
 
     if component in {"switch", "light"}:
@@ -222,6 +241,69 @@ def _fan_discovery_payload(topic: str) -> dict[str, Any]:
         "preset_mode_command_topic": f"{topic}/preset_mode/set",
         "json_attributes_topic": f"{topic}/attributes",
     }
+
+
+def _climate_discovery_payload(topic: str, device: LarnitechDevice) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "mode_state_topic": f"{topic}/mode/state",
+        "mode_command_topic": f"{topic}/mode/set",
+        "modes": ["off", "heat", "cool"],
+        "current_temperature_topic": f"{topic}/current_temperature/state",
+        "temperature_state_topic": f"{topic}/target_temperature/state",
+        "temperature_unit": "C",
+        "precision": 0.1,
+        "temp_step": 0.5,
+        "fan_mode_state_topic": f"{topic}/fan_mode/state",
+        "fan_mode_command_topic": f"{topic}/fan_mode/set",
+        "fan_modes": ["off", "low", "medium", "high"],
+        "json_attributes_topic": f"{topic}/attributes",
+    }
+
+    min_temp = _float_attr(device.raw, "t-min", "t_min")
+    max_temp = _float_attr(device.raw, "t-max", "t_max")
+    if min_temp is not None:
+        payload["min_temp"] = min_temp
+    if max_temp is not None:
+        payload["max_temp"] = max_temp
+
+    preset_modes = _preset_modes(device)
+    if preset_modes:
+        payload.update(
+            {
+                "preset_modes": preset_modes,
+                "preset_mode_state_topic": f"{topic}/preset/state",
+                "preset_mode_command_topic": f"{topic}/preset/set",
+            }
+        )
+
+    return payload
+
+
+def _float_attr(raw: dict[str, Any], *names: str) -> float | None:
+    for name in names:
+        value = raw.get(name)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _preset_modes(device: LarnitechDevice) -> list[str]:
+    automations = device.raw.get("automations")
+    if not isinstance(automations, list):
+        return []
+
+    modes: list[str] = []
+    for automation in automations:
+        if not isinstance(automation, str):
+            continue
+        automation = automation.strip()
+        if automation and automation not in modes:
+            modes.append(automation)
+    return modes
 
 
 def diagnostics_sensor_payload(
