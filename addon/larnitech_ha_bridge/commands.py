@@ -32,8 +32,8 @@ def larnitech_status_for_command(
     """Convert a Home Assistant MQTT command payload to Larnitech API2 status-set.
 
     API2 accepts object status payloads such as {"state": "off"} for simple on/off
-    items. Fancoil speed is sent as manual mode plus fan percentage because the tablet
-    exposes speed control only when Auto is set to Manual.
+    items. Fancoil speed writes remain experimental, but on/off must stay a minimal
+    state-only command because profile/automation fields can keep the unit locked off.
     """
 
     device_type = device.type if device else None
@@ -77,6 +77,7 @@ def larnitech_status_for_command(
 
 
 def _fancoil_state_status(payload: str) -> dict[str, str]:
+    # Keep fancoil on/off as the known-good minimal payload.
     return {"state": "on" if parse_bool_payload(payload) else "off"}
 
 
@@ -94,9 +95,6 @@ def _fancoil_mode_status(payload: str) -> dict[str, str]:
 def _fancoil_fan_status(payload: str) -> dict[str, float | str]:
     value = payload.strip().lower()
 
-    # Tablet manual fancoil control exposes speeds as fan percentages. Larnitech reports
-    # the Manual automation as "none" in the API automations list, so include it when
-    # sending speed commands.
     speed_percent = {
         "off": 0,
         "0": 0,
@@ -119,9 +117,14 @@ def _fancoil_fan_status(payload: str) -> dict[str, float | str]:
             raise ValueError(f"Unsupported fancoil fan mode: {payload!r}") from exc
 
     if fan <= 0:
-        return {"state": "off", "automation": "Off", "fan": 0.0}
+        # Never send automation Off here. Home Assistant sends percentage 0 while
+        # interacting with the fan card; changing the Larnitech automation to Off can
+        # prevent a later state-only ON command from starting the unit again.
+        return {"state": "off"}
 
-    return {"state": "on", "automation": "none", "fan": float(fan)}
+    # This is still experimental. API2 accepts it, but some Larnitech installations
+    # apply fan speed only through the native XML/item update path.
+    return {"state": "on", "fan": float(fan)}
 
 
 def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | str] | str:
@@ -135,8 +138,8 @@ def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | s
         return _fancoil_fan_status(preset)
 
     if preset.lower() == "none":
-        return {"state": "on", "automation": "none"}
+        return {"state": "on"}
 
-    # API2 returns automation names for some fancoils, and accepts this payload shape.
-    # Keep this for legacy profile commands, but new fan discovery does not expose them.
+    # API2 returns automation names for some fancoils. Avoid using them from the fan
+    # entity by default; direct preset commands are left for legacy/manual testing.
     return {"state": "on", "automation": preset}
