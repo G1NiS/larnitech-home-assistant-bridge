@@ -1,19 +1,33 @@
 # Changelog
 
+## 0.1.18 - 2026-07-08
+
+### Fixed
+
+- Restored safe fancoil on/off behaviour by removing automation/profile fields from Home Assistant fan speed zero/off commands.
+- Home Assistant fan percentage `0` now sends only `{"state":"off"}`.
+- Home Assistant fancoil state `ON` continues to send only `{"state":"on"}`.
+- Fancoil speed commands no longer force `automation: none` or `automation: Off`.
+
+### Notes
+
+- API2 accepts fancoil `fan` values, but this installation does not apply physical fan speed through API2 `status-set`.
+- Manual speed control appears to be stored in Larnitech native item/profile configuration and likely requires the tablet/TCP XML item update path, not the documented API2 status path.
+
 ## 0.1.17 - 2026-07-08
 
 ### Changed
 
 - Changed fancoil speed writes to force Larnitech Manual mode before sending the fan percentage.
-- `low` now sends a manual command with fan `33`.
-- `medium` now sends a manual command with fan `66`.
-- `high` now sends a manual command with fan `100`.
-- `off` now sends the Off automation together with fan `0`.
+- `low` sent a manual command with fan `33`.
+- `medium` sent a manual command with fan `66`.
+- `high` sent a manual command with fan `100`.
+- `off` sent the Off automation together with fan `0`.
 
 ### Notes
 
-- 0.1.16 proved that API2 accepts `fan` values, but the physical unit stays on the speed stored in the active Larnitech mode.
-- This release targets the tablet behaviour where speed is only editable when Auto is set to Manual.
+- This approach changed the fancoil mode in Larnitech and could prevent a later state-only ON command from starting the unit again.
+- Reverted in 0.1.18.
 
 ## 0.1.16 - 2026-07-08
 
