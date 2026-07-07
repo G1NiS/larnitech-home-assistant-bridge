@@ -68,8 +68,8 @@ def test_fancoil_maps_to_fan_by_default():
     assert payload["state_topic"] == "larnitech/415_52/state"
     assert payload["preset_mode_command_topic"] == "larnitech/415_52/preset_mode/set"
     assert payload["preset_mode_state_topic"] == "larnitech/415_52/preset_mode/state"
-    assert payload["percentage_command_topic"] == "larnitech/415_52/preset_mode/set"
-    assert payload["percentage_state_topic"] == "larnitech/415_52/preset_mode/state"
+    assert payload["percentage_command_topic"] == "larnitech/415_52/percentage/set"
+    assert payload["percentage_state_topic"] == "larnitech/415_52/percentage/state"
     assert payload["speed_range_min"] == 1
     assert payload["speed_range_max"] == 3
     assert payload["preset_modes"] == ["off", "low", "medium", "high"]
