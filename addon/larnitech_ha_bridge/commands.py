@@ -32,8 +32,8 @@ def larnitech_status_for_command(
     """Convert a Home Assistant MQTT command payload to Larnitech API2 status-set.
 
     API2 accepts object status payloads such as {"state": "off"} for simple on/off
-    items. Fancoil devices are exposed to Home Assistant as 3-speed fans and use raw
-    Larnitech-style status values.
+    items. Fancoil speed is sent as a structured manual fan value because the tablet
+    exposes manual speed control as 0..100 percent fan status.
     """
 
     device_type = device.type if device else None
@@ -85,55 +85,53 @@ def _percent_to_larnitech_power(percent: float) -> int:
     return max(0, min(250, int(round(clamp_level(percent) * 2.5))))
 
 
-def _fancoil_state_status(payload: str) -> str:
-    return _hex_bytes(1 if parse_bool_payload(payload) else 0)
+def _fancoil_state_status(payload: str) -> dict[str, str]:
+    return {"state": "on" if parse_bool_payload(payload) else "off"}
 
 
-def _fancoil_mode_status(payload: str) -> str:
+def _fancoil_mode_status(payload: str) -> dict[str, str]:
     # Backward compatibility for stale climate cards/topics. New discovery publishes
     # fancoils as fan entities, not climate entities.
     mode = payload.strip().lower()
     if mode == "off":
-        return _hex_bytes(0)
+        return {"state": "off"}
     if mode in {"cool", "heat", "on"}:
-        return _hex_bytes(1)
+        return {"state": "on", "mode": mode if mode in {"cool", "heat"} else "heat"}
     raise ValueError(f"Unsupported fancoil HVAC mode: {payload!r}")
 
 
-def _fancoil_fan_status(payload: str) -> str:
+def _fancoil_fan_status(payload: str) -> dict[str, float | str]:
     value = payload.strip().lower()
 
-    # Real installation uses 3 fancoil speeds. The second byte is fan power in the
-    # Larnitech 0..250 range: 1st speed ~= 85, 2nd ~= 170, 3rd = 250.
-    speed_power = {
+    # Tablet manual fancoil control exposes speeds as fan percentages, not raw power bytes.
+    speed_percent = {
         "off": 0,
         "0": 0,
-        "low": 85,
-        "1": 85,
-        "medium": 170,
-        "med": 170,
-        "2": 170,
-        "high": 250,
-        "max": 250,
-        "3": 250,
+        "low": 33,
+        "1": 33,
+        "medium": 66,
+        "med": 66,
+        "2": 66,
+        "high": 100,
+        "max": 100,
+        "3": 100,
     }
 
-    if value in speed_power:
-        power = speed_power[value]
+    if value in speed_percent:
+        fan = speed_percent[value]
     else:
         try:
-            power = _percent_to_larnitech_power(float(value))
+            fan = clamp_level(float(value))
         except ValueError as exc:
             raise ValueError(f"Unsupported fancoil fan mode: {payload!r}") from exc
 
-    if power <= 0:
-        return _hex_bytes(0)
+    if fan <= 0:
+        return {"state": "off", "fan": 0.0}
 
-    # 2-byte fancoil command: byte0=1 (on), byte1=0..250 fan power.
-    return _hex_bytes(1, power)
+    return {"state": "on", "fan": float(fan)}
 
 
-def _fancoil_preset_status(payload: str) -> dict[str, str] | str:
+def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | str] | str:
     preset = payload.strip()
     if not preset:
         raise ValueError("Empty fancoil preset payload")
@@ -144,7 +142,7 @@ def _fancoil_preset_status(payload: str) -> dict[str, str] | str:
         return _fancoil_fan_status(preset)
 
     if preset.lower() == "none":
-        return _hex_bytes(1)
+        return {"state": "on"}
 
     # API2 returns automation names for some fancoils, and accepts this payload shape.
     # Keep this for legacy profile commands, but new fan discovery does not expose them.
