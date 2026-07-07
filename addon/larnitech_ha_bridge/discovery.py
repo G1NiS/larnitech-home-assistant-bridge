@@ -236,11 +236,11 @@ def _fan_discovery_payload(topic: str) -> dict[str, Any]:
         "payload_off": "OFF",
         "state_on": "ON",
         "state_off": "OFF",
-        # Home Assistant fan speed UI is driven by percentage topics. With a 1..3
-        # speed range Home Assistant publishes speed 1, 2 or 3 to percentage_command_topic.
-        "percentage_state_topic": f"{topic}/percentage/state",
-        "percentage_command_topic": f"{topic}/percentage/set",
-        "percentage_value_template": "{{ value | int }}",
+        # Home Assistant fan speed UI is driven by percentage topics. Reuse the existing
+        # preset command topic so current command subscription also receives speed 1/2/3.
+        "percentage_state_topic": f"{topic}/preset_mode/state",
+        "percentage_command_topic": f"{topic}/preset_mode/set",
+        "percentage_value_template": "{{ {'off': 0, 'low': 1, 'medium': 2, 'high': 3}.get(value, 0) }}",
         "speed_range_min": 1,
         "speed_range_max": 3,
         # Keep named presets as a secondary control path for dashboards/cards that expose presets.
