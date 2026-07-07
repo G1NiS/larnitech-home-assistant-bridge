@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.12.
+Early MVP / debug version. Current add-on version: 0.1.13.
 
 Current scope:
 
@@ -28,7 +28,9 @@ Current scope:
 - Group all Larnitech entities under one Home Assistant device by default.
 - Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
-- Publish Larnitech fancoils as Home Assistant fan entities with 3 speeds.
+- Publish Larnitech fancoils as configurable Home Assistant `fan` or `climate` entities.
+
+Full release notes are maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 
 ## Architecture
 
@@ -66,6 +68,8 @@ mqtt_password: "YOUR_MQTT_PASSWORD"
 mqtt_discovery_prefix: "homeassistant"
 bridge_id: "larnitech"
 log_level: "debug"
+device_grouping: "bridge"
+fancoil_entity_mode: "fan"
 ignored_areas: []
 ignored_types: []
 publish_unsupported_devices: true
@@ -74,7 +78,6 @@ publish_unsupported_devices: true
 ## Legal
 
 This project is written as a clean-room implementation. Do not copy code from existing bridges into this repository.
-
 
 ## Device grouping modes
 
@@ -107,6 +110,31 @@ device_grouping: "entity"
 
 Legacy mode: one Home Assistant device per Larnitech item.
 
+## Fancoil entity mode
+
+Default mode for this installation:
+
+```yaml
+fancoil_entity_mode: "fan"
+```
+
+This exposes Larnitech fancoils as Home Assistant fan entities with 3 speeds:
+
+```text
+off     -> 0x00
+low     -> 0x0155
+medium  -> 0x01AA
+high    -> 0x01FA
+```
+
+Alternative mode for pure-Larnitech installations:
+
+```yaml
+fancoil_entity_mode: "climate"
+```
+
+This exposes Larnitech fancoils as Home Assistant climate entities. It keeps HVAC mode, fan mode, preset mode and temperature topics when those values are available from Larnitech.
+
 ## Diagnostics
 
 When enabled:
@@ -117,6 +145,49 @@ publish_module_diagnostics: true
 
 The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
 
+## 0.1.13 configurable fancoil mode
+
+- Adds `fancoil_entity_mode: fan|climate`.
+- Keeps `fan` as default because the current installation controls heating/cooling through Nibe and uses Larnitech fancoils as 3-speed fan coils.
+- Keeps `climate` mode available for users who use only Larnitech for fancoil climate control.
+- Clears stale MQTT Discovery topics when switching fancoils between `fan` and `climate`.
+
+## 0.1.12 fancoils as 3-speed fan entities
+
+- Changes `type="fancoil"` from Home Assistant `climate` to Home Assistant `fan` by default.
+- Removes fake fancoil temperature and heat/cool mode topics from default discovery.
+- Publishes fancoil speed as fan preset mode: `off`, `low`, `medium`, `high`.
+- Maps real 3-speed commands:
+  - `off` -> `0x00`
+  - `low` / speed 1 -> `0x0155`
+  - `medium` / speed 2 -> `0x01AA`
+  - `high` / speed 3 -> `0x01FA`
+
+## 0.1.11 fancoil command payload fix
+
+- Changes fancoil HVAC mode and fan commands from JSON objects to Larnitech-style hex status values.
+- `off` sends `0x00`.
+- Fan mode sends two-byte commands: first byte is on/off, second byte is fancoil fan power scaled to the Larnitech 0..250 range.
+
+## 0.1.10 Larnitech WebSocket keepalive fix
+
+- Disables Python WebSocket protocol pings to avoid Larnitech `keepalive ping timeout` disconnect loops.
+- Keeps reconnect logic in place for real connection/request failures.
+- Adds a short close timeout so a broken socket does not block reconnecting.
+
+## 0.1.9 fancoil climate support
+
+- Adds initial `type="fancoil"` support as Home Assistant MQTT `climate` entities.
+- Replaced by configurable `fan|climate` mode in 0.1.13.
+
+## 0.1.7 faster, lossless reconnects
+
+- A dropped connection now reconnects immediately instead of always waiting out the backoff delay.
+- A command that was in flight when the command connection died is put back on the queue and retried once reconnected.
+
+## 0.1.6 connection resilience
+
+Both the status and command WebSocket connections reconnect automatically with exponential backoff if the connection to Larnitech drops.
 
 ## 0.1.5 command flow
 
@@ -142,52 +213,3 @@ dimmer-lamp brightness:
 button/script/light-scheme:
   PRESS -> "0xFF"
 ```
-
-## 0.1.6 connection resilience
-
-Both the status and command WebSocket connections now reconnect automatically with
-exponential backoff (5s up to 60s) if the connection to Larnitech drops. Previously a
-dropped connection silently stopped status updates and/or commands until the add-on
-was restarted manually.
-
-## 0.1.7 faster, lossless reconnects
-
-- A dropped connection now reconnects immediately instead of always waiting out the
-  backoff delay - the delay only applies when the reconnect attempt itself fails, so a
-  one-off blip recovers as fast as a fresh WebSocket handshake instead of stalling for
-  5+ seconds.
-- A command that was in flight when the command connection died is put back on the
-  queue and retried once reconnected, instead of being silently dropped.
-
-## 0.1.9 fancoil climate support
-
-- Adds initial `type="fancoil"` support as Home Assistant MQTT `climate` entities.
-- This was later replaced because the real installation uses fancoils as 3-speed fans;
-  heating/cooling is handled by Nibe.
-
-## 0.1.10 Larnitech WebSocket keepalive fix
-
-- Disables Python WebSocket protocol pings to avoid Larnitech `keepalive ping timeout`
-  disconnect loops every ~40 seconds.
-- Keeps reconnect logic in place for real connection/request failures.
-- Adds a short close timeout so a broken socket does not block reconnecting.
-
-## 0.1.11 fancoil command payload fix
-
-- Changes fancoil HVAC mode and fan commands from JSON objects to Larnitech-style hex
-  status values.
-- `off` sends `0x00`.
-- Fan mode sends two-byte commands: first byte is on/off, second byte is fancoil fan
-  power scaled to the Larnitech 0..250 range.
-
-## 0.1.12 fancoils as 3-speed fan entities
-
-- Changes `type="fancoil"` from Home Assistant `climate` to Home Assistant `fan`.
-- Removes fake fancoil temperature and heat/cool mode topics.
-- Publishes fancoil speed as fan preset mode: `off`, `low`, `medium`, `high`.
-- Maps real 3-speed commands:
-  - `off` -> `0x00`
-  - `low` / speed 1 -> `0x0155`
-  - `medium` / speed 2 -> `0x01AA`
-  - `high` / speed 3 -> `0x01FA`
-- Clears retained MQTT climate discovery topics from previous fancoil versions.
