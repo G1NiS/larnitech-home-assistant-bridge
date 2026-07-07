@@ -32,9 +32,8 @@ def larnitech_status_for_command(
     """Convert a Home Assistant MQTT command payload to Larnitech API2 status-set.
 
     API2 accepts object status payloads such as {"state": "off"} for simple on/off
-    items. Climate/fancoil devices are more strict in practice: the Larnitech XML
-    documentation defines fancoil commands as raw one-byte or two-byte status values,
-    where byte 0 is off/on/toggle/no-change and byte 1 is fan power from 0..250.
+    items. Fancoil devices are exposed to Home Assistant as 3-speed fans and use raw
+    Larnitech-style status values.
     """
 
     device_type = device.type if device else None
@@ -82,7 +81,7 @@ def _hex_bytes(*values: int) -> str:
 
 
 def _percent_to_larnitech_power(percent: float) -> int:
-    # Larnitech fancoil fan power is 0..250. HA fan modes are user-facing percent bands.
+    # Larnitech fancoil fan power byte is 0..250.
     return max(0, min(250, int(round(clamp_level(percent) * 2.5))))
 
 
@@ -91,41 +90,47 @@ def _fancoil_state_status(payload: str) -> str:
 
 
 def _fancoil_mode_status(payload: str) -> str:
+    # Backward compatibility for stale climate cards/topics. New discovery publishes
+    # fancoils as fan entities, not climate entities.
     mode = payload.strip().lower()
     if mode == "off":
         return _hex_bytes(0)
-    if mode in {"cool", "heat"}:
-        # Larnitech's public fancoil status-setting documentation only guarantees
-        # direct off/on byte commands. Heat/cool is normally encoded in the selected
-        # Larnitech automation/profile, so selecting a non-off HVAC mode turns the
-        # fancoil on without sending unsupported JSON fields.
+    if mode in {"cool", "heat", "on"}:
         return _hex_bytes(1)
     raise ValueError(f"Unsupported fancoil HVAC mode: {payload!r}")
 
 
 def _fancoil_fan_status(payload: str) -> str:
     value = payload.strip().lower()
-    fan_percent = {
+
+    # Real installation uses 3 fancoil speeds. The second byte is fan power in the
+    # Larnitech 0..250 range: 1st speed ~= 85, 2nd ~= 170, 3rd = 250.
+    speed_power = {
         "off": 0,
-        "low": 25,
-        "medium": 50,
-        "high": 75,
-        "max": 100,
+        "0": 0,
+        "low": 85,
+        "1": 85,
+        "medium": 170,
+        "med": 170,
+        "2": 170,
+        "high": 250,
+        "max": 250,
+        "3": 250,
     }
 
-    if value in fan_percent:
-        percent = fan_percent[value]
+    if value in speed_power:
+        power = speed_power[value]
     else:
         try:
-            percent = clamp_level(float(value))
+            power = _percent_to_larnitech_power(float(value))
         except ValueError as exc:
             raise ValueError(f"Unsupported fancoil fan mode: {payload!r}") from exc
 
-    if percent <= 0:
+    if power <= 0:
         return _hex_bytes(0)
 
     # 2-byte fancoil command: byte0=1 (on), byte1=0..250 fan power.
-    return _hex_bytes(1, _percent_to_larnitech_power(percent))
+    return _hex_bytes(1, power)
 
 
 def _fancoil_preset_status(payload: str) -> dict[str, str] | str:
@@ -133,15 +138,14 @@ def _fancoil_preset_status(payload: str) -> dict[str, str] | str:
     if not preset:
         raise ValueError("Empty fancoil preset payload")
 
-    # Home Assistant may emit "none" to clear a preset even when it was not listed
-    # in the discovery payload. Larnitech has no documented "clear automation" name;
-    # keep the device on and avoid sending an invalid automation value.
+    # New fan entity preset modes are the speed names. Keep this here so stale
+    # subscriptions or older retained discovery payloads still control fan speed.
+    if preset.lower() in {"off", "0", "low", "1", "medium", "med", "2", "high", "max", "3"}:
+        return _fancoil_fan_status(preset)
+
     if preset.lower() == "none":
         return _hex_bytes(1)
 
-    if preset.lower() == "off":
-        return {"state": "off", "automation": preset}
-
-    # API2 returns automation names for fancoils, and accepts this payload shape.
-    # Keep this name-based path for Larnitech profiles such as Mode/Eco/Comfort/Fast.
+    # API2 returns automation names for some fancoils, and accepts this payload shape.
+    # Keep this for legacy profile commands, but new fan discovery does not expose them.
     return {"state": "on", "automation": preset}
