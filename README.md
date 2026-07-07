@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.10.
+Early MVP / debug version. Current add-on version: 0.1.11.
 
 Current scope:
 
@@ -176,3 +176,16 @@ was restarted manually.
   disconnect loops every ~40 seconds.
 - Keeps reconnect logic in place for real connection/request failures.
 - Adds a short close timeout so a broken socket does not block reconnecting.
+
+## 0.1.11 fancoil command payload fix
+
+- Changes fancoil HVAC mode and fan commands from JSON objects to Larnitech-style hex
+  status values.
+- `off` sends `0x00`.
+- `heat` and `cool` currently send `0x01` because public Larnitech fancoil command
+  documentation only confirms direct off/on byte commands; heat/cool profile mapping
+  still needs validation against a real installation.
+- Fan mode sends two-byte commands: first byte is on/off, second byte is fancoil fan
+  power scaled to the Larnitech 0..250 range.
+- Keeps preset/profile commands as name-based automation payloads because Larnitech
+  API2 accepts those names and returns success for them.
