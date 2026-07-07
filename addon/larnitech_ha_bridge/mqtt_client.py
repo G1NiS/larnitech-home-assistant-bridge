@@ -12,6 +12,7 @@ import paho.mqtt.client as mqtt
 from .commands import CommandKind
 from .config import BridgeConfig
 from .discovery import (
+    component_discovery_topic,
     diagnostics_sensor_payload,
     discovery_payload,
     discovery_topic,
@@ -88,6 +89,18 @@ class MqttBridgeClient:
                 all_supported_topics.add(topic)
             if old_topic and entity_component(device):
                 legacy_topics.add(old_topic)
+
+            # v0.1.9-v0.1.11 exposed fancoils as climate entities. Clear those retained
+            # MQTT discovery topics after switching fancoils to fan entities.
+            if device.type == "fancoil":
+                legacy_topics.add(
+                    component_discovery_topic(
+                        self.config.mqtt_discovery_prefix,
+                        self.config.bridge_id,
+                        device,
+                        "climate",
+                    )
+                )
 
             if self.should_publish(device) and topic:
                 current_topics.add(topic)
@@ -179,11 +192,20 @@ class MqttBridgeClient:
             self._command_by_topic[brightness_command_topic] = (device.addr, "brightness")
             self.client.subscribe(brightness_command_topic)
 
-        if entity_component(device) == "button":
+        component = entity_component(device)
+
+        if component == "button":
             button_command_topic = payload.get("command_topic")
             if isinstance(button_command_topic, str):
                 self._command_by_topic[button_command_topic] = (device.addr, "press")
                 self.client.subscribe(button_command_topic)
+
+        if component == "fan":
+            preset_mode_command_topic = payload.get("preset_mode_command_topic")
+            if isinstance(preset_mode_command_topic, str):
+                self._command_by_topic[preset_mode_command_topic] = (device.addr, "fan_mode")
+                self.client.subscribe(preset_mode_command_topic)
+            return
 
         climate_command_topics: dict[str, CommandKind] = {
             "mode_command_topic": "mode",
@@ -313,7 +335,8 @@ class MqttBridgeClient:
         if device.type in self.config.ignored_types:
             return False
 
-        if self.config.hide_setup_area and area.lower() == "setup" and component != "climate":
+        # Keep fancoils visible even when Larnitech reports them under the internal Setup area.
+        if self.config.hide_setup_area and area.lower() == "setup" and device.type != "fancoil":
             return False
 
         if self.config.hide_input_switches and device.type == "switch":
@@ -360,53 +383,20 @@ class MqttBridgeClient:
 
     def _publish_fancoil_status(self, topic_base: str, status: DeviceStatus) -> None:
         status_data = self._status_dict(status)
-
-        mode = self._extract_fancoil_mode(status_data)
-        if mode:
-            self.client.publish(f"{topic_base}/mode/state", mode, retain=True)
-
-        current_temperature = self._extract_numeric(
-            status_data,
-            "current",
-            "current_temperature",
-            "temperature",
-            "t_cur",
-            "t-current",
-        )
-        if current_temperature is not None:
-            self.client.publish(
-                f"{topic_base}/current_temperature/state",
-                str(current_temperature),
-                retain=True,
-            )
-
-        target_temperature = self._extract_numeric(
-            status_data,
-            "target",
-            "target_temperature",
-            "setpoint",
-            "t_set",
-            "t-set",
-            "temperature-level",
-        )
-        if target_temperature is not None:
-            self.client.publish(
-                f"{topic_base}/target_temperature/state",
-                str(target_temperature),
-                retain=True,
-            )
-
         fan_level = self._extract_numeric(status_data, "fan", "fan_level", "level")
+
+        self.client.publish(
+            f"{topic_base}/state",
+            self._fancoil_state_from_status(status_data, fan_level),
+            retain=True,
+        )
+
         if fan_level is not None:
             self.client.publish(
-                f"{topic_base}/fan_mode/state",
-                self._fan_mode_from_level(fan_level),
+                f"{topic_base}/preset_mode/state",
+                self._fan_preset_from_level(fan_level),
                 retain=True,
             )
-
-        preset = status_data.get("automation") or status_data.get("preset")
-        if isinstance(preset, str) and preset.strip():
-            self.client.publish(f"{topic_base}/preset/state", preset.strip(), retain=True)
 
         self.client.publish(f"{topic_base}/attributes", json.dumps(status.raw), retain=True)
 
@@ -422,19 +412,15 @@ class MqttBridgeClient:
         return status.raw
 
     @staticmethod
-    def _extract_fancoil_mode(status_data: dict[str, Any]) -> str | None:
+    def _fancoil_state_from_status(status_data: dict[str, Any], fan_level: float | None) -> str:
         state = str(status_data.get("state", "")).lower().strip()
         if state in {"off", "0", "false"}:
-            return "off"
-
-        mode = str(status_data.get("mode", "")).lower().strip()
-        if mode in {"heat", "cool"}:
-            return mode
-
+            return "OFF"
+        if fan_level is not None:
+            return "ON" if fan_level > 0 else "OFF"
         if state in {"on", "1", "true"}:
-            return "heat"
-
-        return None
+            return "ON"
+        return "OFF"
 
     @staticmethod
     def _extract_numeric(status_data: dict[str, Any], *keys: str) -> float | None:
@@ -449,16 +435,14 @@ class MqttBridgeClient:
         return None
 
     @staticmethod
-    def _fan_mode_from_level(level: float) -> str:
+    def _fan_preset_from_level(level: float) -> str:
         if level <= 0:
             return "off"
-        if level <= 33:
+        if level <= 40:
             return "low"
-        if level <= 66:
+        if level <= 75:
             return "medium"
-        if level < 100:
-            return "high"
-        return "max"
+        return "high"
 
     @staticmethod
     def _extract_level(value) -> int | None:
