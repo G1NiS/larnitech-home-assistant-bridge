@@ -34,6 +34,28 @@ def slugify(value: str) -> str:
     return value or "unknown"
 
 
+def normalize_state(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("state", "value", "level", "temperature"):
+            if key in value:
+                return normalize_state(value[key])
+        return str(value)
+
+    if isinstance(value, bool):
+        return "ON" if value else "OFF"
+
+    if isinstance(value, int | float):
+        return f"{float(value):.2f}".rstrip("0").rstrip(".")
+
+    text = str(value).strip()
+    normalized = text.lower()
+    if normalized in {"on", "open", "opened", "true", "1", "yes"}:
+        return "ON"
+    if normalized in {"off", "closed", "close", "false", "0", "no"}:
+        return "OFF"
+    return text
+
+
 def entity_component(
     device: LarnitechDevice,
     fancoil_entity_mode: FancoilEntityMode = "fan",
@@ -236,11 +258,11 @@ def _fan_discovery_payload(topic: str) -> dict[str, Any]:
         "payload_off": "OFF",
         "state_on": "ON",
         "state_off": "OFF",
-        # Home Assistant fan speed UI is driven by percentage topics. Reuse the existing
-        # preset command topic so current command subscription also receives speed 1/2/3.
-        "percentage_state_topic": f"{topic}/preset_mode/state",
-        "percentage_command_topic": f"{topic}/preset_mode/set",
-        "percentage_value_template": "{{ {'off': 0, 'low': 1, 'medium': 2, 'high': 3}.get(value, 0) }}",
+        # Home Assistant MQTT fan percentage values must be numeric values in the configured
+        # speed range. Keep these topics separate from named presets and subscribe to both.
+        "percentage_state_topic": f"{topic}/percentage/state",
+        "percentage_command_topic": f"{topic}/percentage/set",
+        "percentage_value_template": "{{ value | int }}",
         "speed_range_min": 1,
         "speed_range_max": 3,
         # Keep named presets as a secondary control path for dashboards/cards that expose presets.
