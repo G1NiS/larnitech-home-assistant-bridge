@@ -10,6 +10,7 @@
   "bridge_id": "larnitech",
   "log_level": "info",
   "device_grouping": "bridge",
+  "fancoil_entity_mode": "fan",
   "ignored_areas": [],
   "ignored_types": [],
   "hide_setup_area": true,
