@@ -1,61 +1,11 @@
 name: "Larnitech Bridge for Home Assistant"
-version: "0.1.13"
+version: "0.1.14"
 slug: "larnitech_ha_bridge"
 description: "Unofficial Home Assistant bridge for Larnitech-compatible systems using API2 and MQTT Discovery"
 url: "https://github.com/G1NiS/larnitech-home-assistant-bridge"
-arch:
-  - aarch64
-  - amd64
+arch: [aarch64, amd64]
 startup: services
 boot: auto
 init: false
-
-options:
-  larnitech_host: "192.168.xxx.xxx"
-  larnitech_port: 2041
-  larnitech_api_key: ""
-  mqtt_host: "core-mosquitto"
-  mqtt_port: 1883
-  mqtt_username: ""
-  mqtt_password: ""
-  mqtt_discovery_prefix: "homeassistant"
-  bridge_id: "larnitech"
-  log_level: "info"
-  device_grouping: "bridge"
-  fancoil_entity_mode: "fan"
-  ignored_areas: []
-  ignored_types: []
-  hide_setup_area: true
-  hide_input_switches: true
-  publish_light_schemes: false
-  publish_scripts: false
-  publish_unsupported_devices: true
-  cleanup_legacy_mqtt: true
-  prefix_entity_names_with_area: true
-  publish_module_diagnostics: true
-
-schema:
-  larnitech_host: "str"
-  larnitech_port: "port"
-  larnitech_api_key: "password"
-  mqtt_host: "str"
-  mqtt_port: "port"
-  mqtt_username: "str?"
-  mqtt_password: "password?"
-  mqtt_discovery_prefix: "str"
-  bridge_id: "str"
-  log_level: "list(debug|info|warning|error)"
-  device_grouping: "list(area|bridge|entity)"
-  fancoil_entity_mode: "list(fan|climate)"
-  ignored_areas:
-    - "str?"
-  ignored_types:
-    - "str?"
-  hide_setup_area: "bool"
-  hide_input_switches: "bool"
-  publish_light_schemes: "bool"
-  publish_scripts: "bool"
-  publish_unsupported_devices: "bool"
-  cleanup_legacy_mqtt: "bool"
-  prefix_entity_names_with_area: "bool"
-  publish_module_diagnostics: "bool"
+options: {larnitech_host: "192.168.xxx.xxx", larnitech_port: 2041, larnitech_api_key: "", mqtt_host: "core-mosquitto", mqtt_port: 1883, mqtt_username: "", mqtt_password: "", mqtt_discovery_prefix: "homeassistant", bridge_id: "larnitech", log_level: "info", device_grouping: "bridge", fancoil_entity_mode: "fan", ignored_areas: [], ignored_types: [], hide_setup_area: true, hide_input_switches: true, publish_light_schemes: false, publish_scripts: false, publish_unsupported_devices: true, cleanup_legacy_mqtt: true, prefix_entity_names_with_area: true, publish_module_diagnostics: true}
+schema: {larnitech_host: "str", larnitech_port: "port", larnitech_api_key: "password", mqtt_host: "str", mqtt_port: "port", mqtt_username: "str?", mqtt_password: "password?", mqtt_discovery_prefix: "str", bridge_id: "str", log_level: "list(debug|info|warning|error)", device_grouping: "list(area|bridge|entity)", fancoil_entity_mode: "list(fan|climate)", ignored_areas: ["str?"], ignored_types: ["str?"], hide_setup_area: "bool", hide_input_switches: "bool", publish_light_schemes: "bool", publish_scripts: "bool", publish_unsupported_devices: "bool", cleanup_legacy_mqtt: "bool", prefix_entity_names_with_area: "bool", publish_module_diagnostics: "bool"}
