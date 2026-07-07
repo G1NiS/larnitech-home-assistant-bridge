@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.13.
+Early MVP / debug version. Current add-on version: 0.1.14.
 
 Current scope:
 
@@ -127,6 +127,8 @@ medium  -> 0x01AA
 high    -> 0x01FA
 ```
 
+Fan speed control is exposed through Home Assistant MQTT fan percentage speed topics using speed range `1..3`. The same command topic is also reused for named presets so both UI speed control and preset buttons reach the Larnitech command handler.
+
 Alternative mode for pure-Larnitech installations:
 
 ```yaml
@@ -144,6 +146,12 @@ publish_module_diagnostics: true
 ```
 
 The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
+
+## 0.1.14 fancoil fan speed control
+
+- Adds MQTT fan percentage speed discovery for fancoils.
+- Reuses `preset_mode/set` as the percentage speed command topic, so HA speed values `1`, `2`, `3` are routed to the existing fancoil command handler.
+- Keeps named preset modes `off`, `low`, `medium`, `high` for dashboards/cards that expose preset controls.
 
 ## 0.1.13 configurable fancoil mode
 
@@ -167,7 +175,7 @@ The bridge publishes diagnostic sensors with discovered module information based
 
 - Changes fancoil HVAC mode and fan commands from JSON objects to Larnitech-style hex status values.
 - `off` sends `0x00`.
-- Fan mode sends two-byte commands: first byte is on/off, second byte is fancoil fan power scaled to the Larnitech 0..250 range.
+- Fan mode sends two-byte commands: first byte is on/off, second byte is fan power scaled to the Larnitech 0..250 range.
 
 ## 0.1.10 Larnitech WebSocket keepalive fix
 
