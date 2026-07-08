@@ -190,4 +190,4 @@ def test_command_payload_for_fancoil_three_speeds():
     assert larnitech_status_for_command(device, "1", "preset") == {"state": "on", "fan": 33.0}
     assert larnitech_status_for_command(device, "2", "preset") == {"state": "on", "fan": 66.0}
     assert larnitech_status_for_command(device, "3", "preset") == {"state": "on", "fan": 100.0}
-    assert larnitech_status_for_command(device, "0", "fan_mode") == {"state": "off", "fan": 0.0}
+    assert larnitech_status_for_command(device, "0", "fan_mode") == {"state": "off"}
