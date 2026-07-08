@@ -17,7 +17,7 @@ Planned commercial extension with advanced diagnostics, mapping UI, installer to
 
 ## Status
 
-Early MVP / debug version. Current add-on version: 0.1.15.
+Early MVP / debug version. Current add-on version: 0.1.19.
 
 Current scope:
 
@@ -29,6 +29,7 @@ Current scope:
 - Filter internal Setup items and input switches by default.
 - Forward MQTT commands back to Larnitech.
 - Publish Larnitech fancoils as configurable Home Assistant `fan` or `climate` entities.
+- Publish optional fancoil debug logs for diagnosing native Larnitech fan speed behaviour.
 
 Full release notes are maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 
@@ -70,6 +71,7 @@ bridge_id: "larnitech"
 log_level: "debug"
 device_grouping: "bridge"
 fancoil_entity_mode: "fan"
+fancoil_debug: false
 ignored_areas: []
 ignored_types: []
 publish_unsupported_devices: true
@@ -147,6 +149,28 @@ publish_module_diagnostics: true
 
 The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
 
+For fancoil investigation:
+
+```yaml
+fancoil_debug: true
+log_level: "debug"
+```
+
+The bridge logs native Larnitech fancoil status updates and the latest known fancoil status before and after Home Assistant commands. Use this only while testing, then disable it to reduce log noise.
+
+## 0.1.19 fancoil diagnostics
+
+- Adds `fancoil_debug` for controlled fancoil reverse-engineering.
+- Logs native fancoil status updates from API2 `status-subscribe`.
+- Logs latest known fancoil status before Home Assistant commands, mapped command payloads and status after a short wait.
+- Does not change fancoil control behaviour.
+
+## 0.1.18 fancoil safety rollback
+
+- Keeps fancoil on/off commands as minimal state-only API2 payloads.
+- Removes `automation: none` and `automation: Off` from Home Assistant fancoil speed/off commands.
+- Notes that API2 accepts `fan` values but this installation does not apply physical manual fan speed through the documented `status-set` path.
+
 ## 0.1.15 fancoil fan speed control fix
 
 - Separates numeric fan percentage topics from named preset topics.
@@ -166,7 +190,7 @@ The bridge publishes diagnostic sensors with discovered module information based
 - Adds `fancoil_entity_mode: fan|climate`.
 - Keeps `fan` as default because the current installation controls heating/cooling through Nibe and uses Larnitech fancoils as 3-speed fan coils.
 - Keeps `climate` mode available for users who use only Larnitech for fancoil climate control.
-- Clears stale MQTT Discovery topics when switching fancoils between `fan` and `climate`.
+- Clears stale MQTT Discovery topics when switching fancoils between `fan` and `climate` modes.
 
 ## 0.1.12 fancoils as 3-speed fan entities
 
