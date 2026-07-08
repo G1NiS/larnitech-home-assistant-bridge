@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.19 - 2026-07-08
+
+### Added
+
+- Added `fancoil_debug` add-on option for controlled fancoil reverse-engineering.
+- Added fancoil debug logging for native Larnitech status updates received through API2 `status-subscribe`.
+- Added fancoil debug logging before Home Assistant commands, after command mapping, and after a short post-command wait.
+
+### Notes
+
+- This release does not change fancoil control behaviour. It only adds diagnostics so manual Larnitech tablet speed changes can be compared with Home Assistant commands.
+- Use this release to test one fancoil at a time, starting with `415:50` / `Svetaine`.
+
 ## 0.1.18 - 2026-07-08
 
 ### Fixed
