@@ -33,12 +33,17 @@ async def run_bridge() -> None:
     logger = logging.getLogger(__name__)
     pending_commands: asyncio.Queue[tuple[str, str, CommandKind]] = asyncio.Queue()
     devices_by_addr: dict[str, LarnitechDevice] = {}
+    latest_status_by_addr: dict[str, object] = {}
 
     loop = asyncio.get_running_loop()
 
     def on_mqtt_command(addr: str, payload: str, kind: CommandKind) -> None:
         # Paho MQTT callbacks run in a separate thread. Use thread-safe queue handoff.
         loop.call_soon_threadsafe(pending_commands.put_nowait, (addr, payload, kind))
+
+    def is_debug_fancoil(addr: str) -> bool:
+        device = devices_by_addr.get(addr)
+        return bool(config.fancoil_debug and device and device.type == "fancoil")
 
     mqtt_client = MqttBridgeClient(config, on_mqtt_command)
     mqtt_client.connect()
@@ -67,17 +72,54 @@ async def run_bridge() -> None:
                 while True:
                     addr, payload, kind = await pending_commands.get()
                     device = devices_by_addr.get(addr)
+                    debug_fancoil = is_debug_fancoil(addr)
                     requeue = None
                     try:
+                        if debug_fancoil:
+                            logger.info(
+                                "[fancoil-debug] before command: addr=%s kind=%s "
+                                "payload=%s latest_status=%s device_raw=%s",
+                                addr,
+                                kind,
+                                payload,
+                                latest_status_by_addr.get(addr),
+                                device.raw if device else None,
+                            )
+
                         status_payload = larnitech_status_for_command(device, payload, kind)
+
+                        if debug_fancoil:
+                            logger.info(
+                                "[fancoil-debug] mapped command: addr=%s kind=%s "
+                                "payload=%s status_payload=%s",
+                                addr,
+                                kind,
+                                payload,
+                                status_payload,
+                            )
+
                         response = await command_api.set_status(addr, status_payload)
                         logger.info(
                             "Command completed: addr=%s kind=%s payload=%s response=%s",
-                            addr, kind, payload, response,
+                            addr,
+                            kind,
+                            payload,
+                            response,
                         )
+
+                        if debug_fancoil:
+                            await asyncio.sleep(1.5)
+                            logger.info(
+                                "[fancoil-debug] after command: addr=%s latest_status=%s",
+                                addr,
+                                latest_status_by_addr.get(addr),
+                            )
                     except (LarnitechApiError, ValueError):
                         logger.exception(
-                            "Failed to set Larnitech status: addr=%s kind=%s payload=%s", addr, kind, payload
+                            "Failed to set Larnitech status: addr=%s kind=%s payload=%s",
+                            addr,
+                            kind,
+                            payload,
                         )
                     except Exception:
                         # Connection-level failure - the command never reached Larnitech, so put
@@ -125,11 +167,28 @@ async def run_bridge() -> None:
                 devices_by_addr.clear()
                 devices_by_addr.update({device.addr: device for device in filtered_devices})
 
+                latest_status_by_addr.clear()
+                latest_status_by_addr.update({device.addr: device.raw for device in filtered_devices})
+
+                if config.fancoil_debug:
+                    debug_fancoils = [
+                        device.addr for device in filtered_devices if device.type == "fancoil"
+                    ]
+                    logger.info("[fancoil-debug] enabled for fancoils: %s", debug_fancoils)
+
                 published_devices = mqtt_client.publish_discovery(filtered_devices)
                 mqtt_client.publish_initial_status(published_devices)
                 await status_api.subscribe_status()
 
                 async for status in status_api.status_events():
+                    latest_status_by_addr[status.addr] = status.raw
+                    if is_debug_fancoil(status.addr):
+                        logger.info(
+                            "[fancoil-debug] native status update: addr=%s value=%s raw=%s",
+                            status.addr,
+                            status.value,
+                            status.raw,
+                        )
                     mqtt_client.publish_status(status)
             except asyncio.CancelledError:
                 raise
