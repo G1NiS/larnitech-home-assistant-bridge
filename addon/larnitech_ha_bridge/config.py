@@ -33,6 +33,11 @@ class BridgeConfig(BaseModel):
     # - climate: expose Larnitech fancoils as climate devices for pure-Larnitech installations
     fancoil_entity_mode: Literal["fan", "climate"] = "fan"
 
+    # Diagnostic logging for fancoil reverse-engineering. When enabled, the bridge logs
+    # native Larnitech fancoil status updates and the latest known status before/after
+    # Home Assistant fancoil commands.
+    fancoil_debug: bool = False
+
     ignored_areas: list[str] = Field(default_factory=list)
     ignored_types: list[str] = Field(default_factory=list)
     hide_setup_area: bool = True
@@ -71,6 +76,8 @@ def load_config() -> BridgeConfig:
             "log_level": os.getenv("LOG_LEVEL", "info"),
             "device_grouping": os.getenv("DEVICE_GROUPING", "bridge"),
             "fancoil_entity_mode": os.getenv("FANCOIL_ENTITY_MODE", "fan"),
+            "fancoil_debug": os.getenv("FANCOIL_DEBUG", "false").lower()
+            in {"1", "true", "yes", "on"},
         }
 
     if not raw.get("larnitech_api_key"):
