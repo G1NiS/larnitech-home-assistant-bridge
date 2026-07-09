@@ -14,6 +14,9 @@ FANCOIL_LEVEL_OFF = 0.0
 FANCOIL_LEVEL_LOW = 33.2
 FANCOIL_LEVEL_MEDIUM = 66.4
 FANCOIL_LEVEL_HIGH = 100.0
+FANCOIL_POWER_LOW = 0x53
+FANCOIL_POWER_MEDIUM = 0xA6
+FANCOIL_POWER_HIGH = 0xFA
 
 
 def parse_bool_payload(payload: str) -> bool:
@@ -44,6 +47,31 @@ def fancoil_native_level(percent: float) -> float:
     return FANCOIL_LEVEL_HIGH
 
 
+def fancoil_power_for_percent(percent: float) -> int:
+    """Return the closest documented Larnitech fancoil power byte, 0-250."""
+    native_level = fancoil_native_level(percent)
+    if native_level <= 0:
+        return 0
+    if native_level == FANCOIL_LEVEL_LOW:
+        return FANCOIL_POWER_LOW
+    if native_level == FANCOIL_LEVEL_MEDIUM:
+        return FANCOIL_POWER_MEDIUM
+    return FANCOIL_POWER_HIGH
+
+
+def fancoil_raw_hex(power: int, *, turn_on: bool = True) -> str:
+    """Return a documented raw fancoil status-set payload.
+
+    The Larnitech fancoil setting format supports two bytes:
+    - byte 0: 1 = on, 0 = off, 0xFE = do not change on/off
+    - byte 1: fan power, 0-250
+    """
+    if power <= 0:
+        return "0x00"
+    first_byte = 0x01 if turn_on else 0xFE
+    return f"0x{first_byte:02X}{max(0, min(0xFA, power)):02X}"
+
+
 def larnitech_status_for_command(
     device: LarnitechDevice | None,
     payload: str,
@@ -52,8 +80,8 @@ def larnitech_status_for_command(
     """Convert a Home Assistant MQTT command payload to Larnitech API2 status-set.
 
     API2 accepts object status payloads such as {"state": "off"} for simple on/off
-    items. For fancoils, use the native manual fan levels observed from API2
-    status-subscribe when speeds are changed in the Larnitech UI.
+    items. Fancoil structured fan fields are accepted by API2 but can be ignored by
+    Larnitech runtime, so fancoil speed writes use the documented raw 2-byte payload.
     """
 
     device_type = device.type if device else None
@@ -96,57 +124,52 @@ def larnitech_status_for_command(
     return {"state": "on" if is_on else "off"}
 
 
-def _fancoil_state_status(payload: str) -> dict[str, str]:
-    # Keep fancoil on/off as a minimal payload. Native Larnitech UI also keeps the
-    # last selected fan level when the fancoil is switched off.
-    return {"state": "on" if parse_bool_payload(payload) else "off"}
+def _fancoil_state_status(payload: str) -> str:
+    # Use raw payloads for fancoil state too. The structured {"state":"on"} path
+    # turns the device on but this installation keeps/restores fan=100 and mode=heat.
+    return fancoil_raw_hex(FANCOIL_POWER_HIGH) if parse_bool_payload(payload) else "0x00"
 
 
-def _fancoil_mode_status(payload: str) -> dict[str, str]:
+def _fancoil_mode_status(payload: str) -> str:
     # Backward compatibility for stale climate cards/topics. New discovery publishes
-    # fancoils as fan entities, not climate entities.
+    # fancoils as fan entities, not climate entities. Larnitech mode appears to be a
+    # runtime/status bit and is not reliably changed by structured API2 mode fields.
     mode = payload.strip().lower()
     if mode == "off":
-        return {"state": "off"}
+        return "0x00"
     if mode in {"cool", "heat", "on"}:
-        return {"state": "on", "mode": mode if mode in {"cool", "heat"} else "heat"}
+        return fancoil_raw_hex(FANCOIL_POWER_HIGH)
     raise ValueError(f"Unsupported fancoil HVAC mode: {payload!r}")
 
 
-def _fancoil_fan_status(payload: str) -> dict[str, float | str]:
+def _fancoil_fan_status(payload: str) -> str:
     value = payload.strip().lower()
 
-    native_speed_percent = {
-        "off": FANCOIL_LEVEL_OFF,
-        "0": FANCOIL_LEVEL_OFF,
-        "low": FANCOIL_LEVEL_LOW,
-        "1": FANCOIL_LEVEL_LOW,
-        "medium": FANCOIL_LEVEL_MEDIUM,
-        "med": FANCOIL_LEVEL_MEDIUM,
-        "2": FANCOIL_LEVEL_MEDIUM,
-        "high": FANCOIL_LEVEL_HIGH,
-        "max": FANCOIL_LEVEL_HIGH,
-        "3": FANCOIL_LEVEL_HIGH,
+    speed_power = {
+        "off": 0,
+        "0": 0,
+        "low": FANCOIL_POWER_LOW,
+        "1": FANCOIL_POWER_LOW,
+        "medium": FANCOIL_POWER_MEDIUM,
+        "med": FANCOIL_POWER_MEDIUM,
+        "2": FANCOIL_POWER_MEDIUM,
+        "high": FANCOIL_POWER_HIGH,
+        "max": FANCOIL_POWER_HIGH,
+        "3": FANCOIL_POWER_HIGH,
     }
 
-    if value in native_speed_percent:
-        fan = native_speed_percent[value]
+    if value in speed_power:
+        power = speed_power[value]
     else:
         try:
-            fan = fancoil_native_level(float(value))
+            power = fancoil_power_for_percent(float(value))
         except ValueError as exc:
             raise ValueError(f"Unsupported fancoil fan mode: {payload!r}") from exc
 
-    if fan <= 0:
-        # Native Larnitech UI can report state=on, fan=0.0, but Home Assistant fan
-        # percentage 0 semantically means OFF. Keep it as state-only OFF so it does
-        # not alter profile/automation fields.
-        return {"state": "off"}
-
-    return {"state": "on", "fan": fan}
+    return fancoil_raw_hex(power)
 
 
-def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | str] | str:
+def _fancoil_preset_status(payload: str) -> str | dict[str, str]:
     preset = payload.strip()
     if not preset:
         raise ValueError("Empty fancoil preset payload")
@@ -157,7 +180,7 @@ def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | s
         return _fancoil_fan_status(preset)
 
     if preset.lower() == "none":
-        return {"state": "on"}
+        return fancoil_raw_hex(FANCOIL_POWER_HIGH)
 
     # API2 returns automation names for some fancoils. Avoid using them from the fan
     # entity by default; direct preset commands are left for legacy/manual testing.
