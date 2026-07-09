@@ -182,16 +182,13 @@ def test_command_payload_for_fancoil_three_speeds():
         area="Setup",
         raw={},
     )
-    assert larnitech_status_for_command(device, "OFF", "state") == {"state": "off"}
-    assert larnitech_status_for_command(device, "ON", "state") == {"state": "on"}
-    assert larnitech_status_for_command(device, "low", "fan_mode") == {"state": "on", "fan": 33.2}
-    assert larnitech_status_for_command(device, "medium", "fan_mode") == {
-        "state": "on",
-        "fan": 66.4,
-    }
-    assert larnitech_status_for_command(device, "high", "fan_mode") == {"state": "on", "fan": 100.0}
-    assert larnitech_status_for_command(device, "1", "preset") == {"state": "on", "fan": 33.2}
-    assert larnitech_status_for_command(device, "2", "preset") == {"state": "on", "fan": 66.4}
-    assert larnitech_status_for_command(device, "3", "preset") == {"state": "on", "fan": 100.0}
-    assert larnitech_status_for_command(device, "35", "fan_mode") == {"state": "on", "fan": 66.4}
-    assert larnitech_status_for_command(device, "0", "fan_mode") == {"state": "off"}
+    assert larnitech_status_for_command(device, "OFF", "state") == "0x00"
+    assert larnitech_status_for_command(device, "ON", "state") == "0x01FA"
+    assert larnitech_status_for_command(device, "low", "fan_mode") == "0x0153"
+    assert larnitech_status_for_command(device, "medium", "fan_mode") == "0x01A6"
+    assert larnitech_status_for_command(device, "high", "fan_mode") == "0x01FA"
+    assert larnitech_status_for_command(device, "1", "preset") == "0x0153"
+    assert larnitech_status_for_command(device, "2", "preset") == "0x01A6"
+    assert larnitech_status_for_command(device, "3", "preset") == "0x01FA"
+    assert larnitech_status_for_command(device, "35", "fan_mode") == "0x01A6"
+    assert larnitech_status_for_command(device, "0", "fan_mode") == "0x00"
