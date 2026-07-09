@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.20 - 2026-07-09
+
+### Added
+
+- Added `full_api_dump` add-on option for complete Larnitech API2 diagnostics.
+- When enabled, the bridge logs and stores the full `get-devices` API2 response without filtering by area, type, Setup/system area, supported entity type, or Home Assistant discovery eligibility.
+- When enabled, the bridge logs and stores every raw `status-subscribe` message received from Larnitech API2.
+- When enabled, the bridge also records Home Assistant command payloads and the matching Larnitech API2 command responses.
+
+### Notes
+
+- This release does not change fancoil control behaviour.
+- Dump files are written inside the add-on data directory under `/data/full_api_dump/`:
+  - `devices_full_<timestamp>.json`
+  - `status_stream_<timestamp>.jsonl`
+- The same dump records are also written to the add-on log with the `[full-api-dump]` prefix so they can be copied from Home Assistant logs.
+- Use this only for short diagnostic windows because it logs the whole system.
+
 ## 0.1.19 - 2026-07-08
 
 ### Added
@@ -88,18 +106,3 @@
   - `low` / speed 1 -> `0x0155`
   - `medium` / speed 2 -> `0x01AA`
   - `high` / speed 3 -> `0x01FA`
-
-## 0.1.13 - 2026-07-07
-
-### Added
-
-- Added `fancoil_entity_mode` add-on option:
-  - `fan` - exposes Larnitech fancoils as Home Assistant fan entities.
-  - `climate` - exposes Larnitech fancoils as Home Assistant climate entities for pure-Larnitech installations.
-- Added automatic cleanup of stale fancoil MQTT Discovery topics when switching between `fan` and `climate` modes.
-- Added tests for both fancoil discovery modes.
-
-### Changed
-
-- Kept `fan` as the default fancoil mode because this installation controls heating/cooling via Nibe and uses Larnitech fancoils as 3-speed air units.
-- Published `fancoil_entity_mode` in diagnostics attributes.
