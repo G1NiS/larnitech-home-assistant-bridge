@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.22 - 2026-07-09
+
+### Changed
+
+- Changed fancoil speed and state commands from structured API2 objects to documented raw hex fancoil payloads.
+- Fancoil command mapping:
+  - `off` / `0` -> `0x00`
+  - `low` / `1` -> `0x0153`
+  - `medium` / `2` -> `0x01A6`
+  - `high` / `3` -> `0x01FA`
+  - `ON` -> `0x01FA`
+  - `OFF` -> `0x00`
+
+### Notes
+
+- `0.1.21` confirmed that Larnitech API2 accepts structured `{"state":"on","fan":33.2}` payloads but this installation restores/reports `fan=100.0` and `mode=heat` after the command.
+- This release tests the lower-level fancoil setting path described by Larnitech documentation: byte 0 = on/off command, byte 1 = fan power 0-250.
+- If this still does not change physical speed, the remaining path is a native Larnitech script or TCP/UI item update path.
+
 ## 0.1.21 - 2026-07-09
 
 ### Changed
