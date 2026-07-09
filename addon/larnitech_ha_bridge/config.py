@@ -38,6 +38,10 @@ class BridgeConfig(BaseModel):
     # Home Assistant fancoil commands.
     fancoil_debug: bool = False
 
+    # Full API2 diagnostics. When enabled, the bridge dumps the complete get-devices
+    # response and every raw status-subscribe message without filtering by area/type.
+    full_api_dump: bool = False
+
     ignored_areas: list[str] = Field(default_factory=list)
     ignored_types: list[str] = Field(default_factory=list)
     hide_setup_area: bool = True
@@ -77,6 +81,8 @@ def load_config() -> BridgeConfig:
             "device_grouping": os.getenv("DEVICE_GROUPING", "bridge"),
             "fancoil_entity_mode": os.getenv("FANCOIL_ENTITY_MODE", "fan"),
             "fancoil_debug": os.getenv("FANCOIL_DEBUG", "false").lower()
+            in {"1", "true", "yes", "on"},
+            "full_api_dump": os.getenv("FULL_API_DUMP", "false").lower()
             in {"1", "true", "yes", "on"},
         }
 
