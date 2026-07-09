@@ -7,6 +7,15 @@ from .models import LarnitechDevice
 CommandKind = Literal["state", "brightness", "press", "mode", "fan_mode", "preset"]
 
 
+# Native Larnitech fancoil API2 status-subscribe reports manual fan levels as
+# 0.0 / 33.2 / 66.4 / 100.0. The 33.2 and 66.4 values correspond to 83/250
+# and 166/250 in the documented fancoil power scale.
+FANCOIL_LEVEL_OFF = 0.0
+FANCOIL_LEVEL_LOW = 33.2
+FANCOIL_LEVEL_MEDIUM = 66.4
+FANCOIL_LEVEL_HIGH = 100.0
+
+
 def parse_bool_payload(payload: str) -> bool:
     value = payload.strip().lower()
     if value in {"on", "1", "true", "yes", "open"}:
@@ -24,6 +33,17 @@ def clamp_level(value: float) -> int:
     return int(round(value))
 
 
+def fancoil_native_level(percent: float) -> float:
+    """Return the closest native Larnitech manual fancoil level."""
+    if percent <= 0:
+        return FANCOIL_LEVEL_OFF
+    if percent <= 34:
+        return FANCOIL_LEVEL_LOW
+    if percent <= 67:
+        return FANCOIL_LEVEL_MEDIUM
+    return FANCOIL_LEVEL_HIGH
+
+
 def larnitech_status_for_command(
     device: LarnitechDevice | None,
     payload: str,
@@ -32,8 +52,8 @@ def larnitech_status_for_command(
     """Convert a Home Assistant MQTT command payload to Larnitech API2 status-set.
 
     API2 accepts object status payloads such as {"state": "off"} for simple on/off
-    items. Fancoil speed writes remain experimental, but on/off must stay a minimal
-    state-only command because profile/automation fields can keep the unit locked off.
+    items. For fancoils, use the native manual fan levels observed from API2
+    status-subscribe when speeds are changed in the Larnitech UI.
     """
 
     device_type = device.type if device else None
@@ -77,7 +97,8 @@ def larnitech_status_for_command(
 
 
 def _fancoil_state_status(payload: str) -> dict[str, str]:
-    # Keep fancoil on/off as the known-good minimal payload.
+    # Keep fancoil on/off as a minimal payload. Native Larnitech UI also keeps the
+    # last selected fan level when the fancoil is switched off.
     return {"state": "on" if parse_bool_payload(payload) else "off"}
 
 
@@ -95,36 +116,34 @@ def _fancoil_mode_status(payload: str) -> dict[str, str]:
 def _fancoil_fan_status(payload: str) -> dict[str, float | str]:
     value = payload.strip().lower()
 
-    speed_percent = {
-        "off": 0,
-        "0": 0,
-        "low": 33,
-        "1": 33,
-        "medium": 66,
-        "med": 66,
-        "2": 66,
-        "high": 100,
-        "max": 100,
-        "3": 100,
+    native_speed_percent = {
+        "off": FANCOIL_LEVEL_OFF,
+        "0": FANCOIL_LEVEL_OFF,
+        "low": FANCOIL_LEVEL_LOW,
+        "1": FANCOIL_LEVEL_LOW,
+        "medium": FANCOIL_LEVEL_MEDIUM,
+        "med": FANCOIL_LEVEL_MEDIUM,
+        "2": FANCOIL_LEVEL_MEDIUM,
+        "high": FANCOIL_LEVEL_HIGH,
+        "max": FANCOIL_LEVEL_HIGH,
+        "3": FANCOIL_LEVEL_HIGH,
     }
 
-    if value in speed_percent:
-        fan = speed_percent[value]
+    if value in native_speed_percent:
+        fan = native_speed_percent[value]
     else:
         try:
-            fan = clamp_level(float(value))
+            fan = fancoil_native_level(float(value))
         except ValueError as exc:
             raise ValueError(f"Unsupported fancoil fan mode: {payload!r}") from exc
 
     if fan <= 0:
-        # Never send automation Off here. Home Assistant sends percentage 0 while
-        # interacting with the fan card; changing the Larnitech automation to Off can
-        # prevent a later state-only ON command from starting the unit again.
+        # Native Larnitech UI can report state=on, fan=0.0, but Home Assistant fan
+        # percentage 0 semantically means OFF. Keep it as state-only OFF so it does
+        # not alter profile/automation fields.
         return {"state": "off"}
 
-    # This is still experimental. API2 accepts it, but some Larnitech installations
-    # apply fan speed only through the native XML/item update path.
-    return {"state": "on", "fan": float(fan)}
+    return {"state": "on", "fan": fan}
 
 
 def _fancoil_preset_status(payload: str) -> dict[str, str] | dict[str, float | str] | str:
