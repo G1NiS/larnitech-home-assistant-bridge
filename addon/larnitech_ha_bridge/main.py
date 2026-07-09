@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import signal
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from .commands import CommandKind, larnitech_status_for_command
 from .config import load_config
@@ -12,6 +16,7 @@ from .mqtt_client import MqttBridgeClient
 
 RECONNECT_DELAY_INITIAL = 5
 RECONNECT_DELAY_MAX = 60
+FULL_API_DUMP_DIR = Path("/data/full_api_dump")
 
 
 def setup_logging(level: str) -> None:
@@ -26,6 +31,19 @@ def setup_logging(level: str) -> None:
     logging.getLogger("websockets.client").setLevel(logging.INFO)
 
 
+def json_dumps(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def make_dump_paths() -> tuple[Path, Path]:
+    FULL_API_DUMP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return (
+        FULL_API_DUMP_DIR / f"devices_full_{stamp}.json",
+        FULL_API_DUMP_DIR / f"status_stream_{stamp}.jsonl",
+    )
+
+
 async def run_bridge() -> None:
     config = load_config()
     setup_logging(config.log_level)
@@ -34,6 +52,17 @@ async def run_bridge() -> None:
     pending_commands: asyncio.Queue[tuple[str, str, CommandKind]] = asyncio.Queue()
     devices_by_addr: dict[str, LarnitechDevice] = {}
     latest_status_by_addr: dict[str, object] = {}
+    dump_devices_path: Path | None = None
+    dump_stream_path: Path | None = None
+
+    if config.full_api_dump:
+        dump_devices_path, dump_stream_path = make_dump_paths()
+        logger.warning(
+            "[full-api-dump] enabled. Dumping full get-devices response and every raw "
+            "status-subscribe message without filtering. Files: devices=%s stream=%s",
+            dump_devices_path,
+            dump_stream_path,
+        )
 
     loop = asyncio.get_running_loop()
 
@@ -44,6 +73,19 @@ async def run_bridge() -> None:
     def is_debug_fancoil(addr: str) -> bool:
         device = devices_by_addr.get(addr)
         return bool(config.fancoil_debug and device and device.type == "fancoil")
+
+    def write_full_api_dump(kind: str, payload: Any) -> None:
+        if not config.full_api_dump or dump_stream_path is None:
+            return
+        record = {
+            "ts": datetime.now().isoformat(timespec="milliseconds"),
+            "kind": kind,
+            "payload": payload,
+        }
+        line = json_dumps(record)
+        with dump_stream_path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+        logger.info("[full-api-dump] %s %s", kind, line)
 
     mqtt_client = MqttBridgeClient(config, on_mqtt_command)
     mqtt_client.connect()
@@ -98,7 +140,22 @@ async def run_bridge() -> None:
                                 status_payload,
                             )
 
+                        if config.full_api_dump:
+                            write_full_api_dump(
+                                "ha_command",
+                                {
+                                    "addr": addr,
+                                    "kind": kind,
+                                    "mqtt_payload": payload,
+                                    "status_payload": status_payload,
+                                    "latest_status": latest_status_by_addr.get(addr),
+                                    "device_raw": device.raw if device else None,
+                                },
+                            )
+
                         response = await command_api.set_status(addr, status_payload)
+                        if config.full_api_dump:
+                            write_full_api_dump("ha_command_response", response)
                         logger.info(
                             "Command completed: addr=%s kind=%s payload=%s response=%s",
                             addr,
@@ -143,7 +200,29 @@ async def run_bridge() -> None:
         while True:
             try:
                 await status_api.connect()
-                devices = await status_api.get_devices()
+                devices_response = await status_api.get_devices_response()
+                devices = status_api.devices_from_response(devices_response)
+                logger.info("[status] Discovered %s Larnitech devices", len(devices))
+                for device in devices:
+                    logger.debug(
+                        "[status] Device: addr=%s name=%s type=%s area=%s raw=%s",
+                        device.addr,
+                        device.name,
+                        device.type,
+                        device.area,
+                        device.raw,
+                    )
+                if config.full_api_dump:
+                    write_full_api_dump("get_devices_response", devices_response)
+                    if dump_devices_path is not None:
+                        dump_devices_path.write_text(
+                            json.dumps(devices_response, ensure_ascii=False, indent=2, sort_keys=True),
+                            encoding="utf-8",
+                        )
+                        logger.warning(
+                            "[full-api-dump] wrote complete get-devices response to %s",
+                            dump_devices_path,
+                        )
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -180,16 +259,19 @@ async def run_bridge() -> None:
                 mqtt_client.publish_initial_status(published_devices)
                 await status_api.subscribe_status()
 
-                async for status in status_api.status_events():
-                    latest_status_by_addr[status.addr] = status.raw
-                    if is_debug_fancoil(status.addr):
-                        logger.info(
-                            "[fancoil-debug] native status update: addr=%s value=%s raw=%s",
-                            status.addr,
-                            status.value,
-                            status.raw,
-                        )
-                    mqtt_client.publish_status(status)
+                async for message in status_api.raw_messages():
+                    if config.full_api_dump:
+                        write_full_api_dump("status_message", message)
+                    for status in status_api.extract_status_events(message):
+                        latest_status_by_addr[status.addr] = status.raw
+                        if is_debug_fancoil(status.addr):
+                            logger.info(
+                                "[fancoil-debug] native status update: addr=%s value=%s raw=%s",
+                                status.addr,
+                                status.value,
+                                status.raw,
+                            )
+                        mqtt_client.publish_status(status)
             except asyncio.CancelledError:
                 raise
             except Exception:
