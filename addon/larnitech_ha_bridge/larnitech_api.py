@@ -101,19 +101,13 @@ class LarnitechApiClient:
         self._raise_if_error(response, request_type)
         return response
 
+    async def get_devices_response(self) -> dict[str, Any]:
+        """Return the complete raw API2 get-devices response."""
+        return await self.request("get-devices", status="detailed")
+
     async def get_devices(self) -> list[LarnitechDevice]:
-        response = await self.request("get-devices", status="detailed")
-        raw_devices = (
-            response.get("devices")
-            or response.get("data")
-            or response.get("result")
-            or []
-        )
-
-        if isinstance(raw_devices, dict):
-            raw_devices = list(raw_devices.values())
-
-        devices = [LarnitechDevice.from_raw(item) for item in raw_devices if isinstance(item, dict)]
+        response = await self.get_devices_response()
+        devices = self.devices_from_response(response)
         _LOGGER.info("[%s] Discovered %s Larnitech devices", self.name, len(devices))
         for device in devices:
             _LOGGER.debug(
@@ -127,6 +121,20 @@ class LarnitechApiClient:
             )
         return devices
 
+    @staticmethod
+    def devices_from_response(response: dict[str, Any]) -> list[LarnitechDevice]:
+        raw_devices = (
+            response.get("devices")
+            or response.get("data")
+            or response.get("result")
+            or []
+        )
+
+        if isinstance(raw_devices, dict):
+            raw_devices = list(raw_devices.values())
+
+        return [LarnitechDevice.from_raw(item) for item in raw_devices if isinstance(item, dict)]
+
     async def set_status(self, addr: str, status: Any) -> dict[str, Any]:
         _LOGGER.info("[%s] Sending status-set: addr=%s status=%s", self.name, addr, status)
         return await self.request("status-set", addr=addr, status=status)
@@ -139,7 +147,7 @@ class LarnitechApiClient:
         except LarnitechApiError as exc:
             _LOGGER.warning("[%s] Status subscription failed: %s", self.name, exc)
 
-    async def status_events(self) -> AsyncIterator[DeviceStatus]:
+    async def raw_messages(self) -> AsyncIterator[dict[str, Any]]:
         if self._ws is None:
             raise RuntimeError("Larnitech WebSocket is not connected")
 
@@ -150,11 +158,19 @@ class LarnitechApiClient:
             except json.JSONDecodeError:
                 _LOGGER.warning("[%s] Invalid JSON from Larnitech: %s", self.name, raw_message)
                 continue
+            yield data
 
-            for status in self._extract_status_events(data):
+    async def status_events(self) -> AsyncIterator[DeviceStatus]:
+        async for data in self.raw_messages():
+            for status in self.extract_status_events(data):
                 yield status
 
-    def _extract_status_events(self, data: dict[str, Any]) -> list[DeviceStatus]:
+    @classmethod
+    def extract_status_events(cls, data: dict[str, Any]) -> list[DeviceStatus]:
+        return cls._extract_status_events(data)
+
+    @staticmethod
+    def _extract_status_events(data: dict[str, Any]) -> list[DeviceStatus]:
         events: list[DeviceStatus] = []
 
         if isinstance(data.get("devices"), list):
