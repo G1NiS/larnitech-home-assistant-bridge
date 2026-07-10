@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.23 - 2026-07-09
+
+### Changed
+
+- Cleaned up experimental fancoil speed, climate, raw hex, full API dump, and fancoil debug paths.
+- Fancoils are now exposed as simple Home Assistant `fan` entities with only ON/OFF control.
+- Removed fancoil speed command topics from MQTT discovery:
+  - `percentage_command_topic`
+  - `percentage_state_topic`
+  - `preset_mode_command_topic`
+  - `preset_mode_state_topic`
+- Removed `fancoil_entity_mode`, `fancoil_debug`, and `full_api_dump` add-on options from the UI schema.
+- Fancoil commands now send only minimal structured API2 payloads:
+  - `ON` -> `{"state":"on"}`
+  - `OFF` -> `{"state":"off"}`
+- Stale retained speed/preset commands from earlier releases are safely degraded to ON/OFF if they still arrive.
+
+### Notes
+
+- Lights and dimmers remain unchanged.
+- Light schemes and scripts remain disabled by default unless explicitly enabled with their existing options.
+- This release intentionally stops trying to control fancoil Low/Medium/High speed through API2 because the installation accepts those commands but restores `fan=100.0` at runtime.
+
 ## 0.1.22 - 2026-07-09
 
 ### Changed
