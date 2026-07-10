@@ -61,8 +61,9 @@ class MqttBridgeClient:
             retain=True,
         )
 
-    def _component_for_device(self, device: LarnitechDevice) -> str | None:
-        return entity_component(device, fancoil_entity_mode=self.config.fancoil_entity_mode)
+    @staticmethod
+    def _component_for_device(device: LarnitechDevice) -> str | None:
+        return entity_component(device)
 
     def publish_discovery(self, devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
         publishable = [device for device in devices if self.should_publish(device)]
@@ -82,13 +83,11 @@ class MqttBridgeClient:
                 self.config.mqtt_discovery_prefix,
                 self.config.bridge_id,
                 device,
-                fancoil_entity_mode=self.config.fancoil_entity_mode,
             )
             old_topic = legacy_discovery_topic(
                 self.config.mqtt_discovery_prefix,
                 self.config.bridge_id,
                 device,
-                fancoil_entity_mode=self.config.fancoil_entity_mode,
             )
 
             if topic and component:
@@ -96,31 +95,28 @@ class MqttBridgeClient:
             if old_topic and component:
                 legacy_topics.add(old_topic)
 
-            # Fancoils can be exposed as either fan or climate. Clear the opposite retained
-            # MQTT discovery topic so Home Assistant does not keep stale duplicate entities.
+            # Clear stale climate discovery retained from earlier experimental fancoil releases.
             if device.type == "fancoil" and component:
-                for stale_component in {"fan", "climate"} - {component}:
-                    legacy_topics.add(
-                        component_discovery_topic(
-                            self.config.mqtt_discovery_prefix,
-                            self.config.bridge_id,
-                            device,
-                            stale_component,
-                        )
+                legacy_topics.add(
+                    component_discovery_topic(
+                        self.config.mqtt_discovery_prefix,
+                        self.config.bridge_id,
+                        device,
+                        "climate",
                     )
+                )
 
             if self.should_publish(device) and topic:
                 current_topics.add(topic)
 
         self._cleanup_stale_discovery_topics(current_topics, all_supported_topics, legacy_topics)
 
-        # Second pass: publish new grouped discovery payloads.
+        # Second pass: publish discovery payloads.
         for device in devices:
             topic = discovery_topic(
                 self.config.mqtt_discovery_prefix,
                 self.config.bridge_id,
                 device,
-                fancoil_entity_mode=self.config.fancoil_entity_mode,
             )
 
             if not self.should_publish(device):
@@ -139,7 +135,6 @@ class MqttBridgeClient:
                 device,
                 grouping=self.config.device_grouping,
                 prefix_area=self.config.prefix_entity_names_with_area,
-                fancoil_entity_mode=self.config.fancoil_entity_mode,
             )
 
             if topic is None or payload is None:
@@ -158,11 +153,9 @@ class MqttBridgeClient:
             self._subscribe_entity_commands(device, payload)
 
         _LOGGER.info(
-            "Published MQTT discovery for %s entities using "
-            "device_grouping=%s, fancoil_entity_mode=%s",
+            "Published MQTT discovery for %s entities using device_grouping=%s",
             supported,
             self.config.device_grouping,
-            self.config.fancoil_entity_mode,
         )
         _LOGGER.info("Skipped %s filtered Larnitech items", len(skipped))
 
@@ -210,29 +203,6 @@ class MqttBridgeClient:
             if isinstance(button_command_topic, str):
                 self._command_by_topic[button_command_topic] = (device.addr, "press")
                 self.client.subscribe(button_command_topic)
-
-        if component == "fan":
-            fan_command_topics = (
-                payload.get("preset_mode_command_topic"),
-                payload.get("percentage_command_topic"),
-            )
-            for fan_command_topic in fan_command_topics:
-                if isinstance(fan_command_topic, str):
-                    self._command_by_topic[fan_command_topic] = (device.addr, "fan_mode")
-                    self.client.subscribe(fan_command_topic)
-            return
-
-        if component == "climate":
-            climate_command_topics: dict[str, CommandKind] = {
-                "mode_command_topic": "mode",
-                "fan_mode_command_topic": "fan_mode",
-                "preset_mode_command_topic": "preset",
-            }
-            for payload_key, command_kind in climate_command_topics.items():
-                climate_command_topic = payload.get(payload_key)
-                if isinstance(climate_command_topic, str):
-                    self._command_by_topic[climate_command_topic] = (device.addr, command_kind)
-                    self.client.subscribe(climate_command_topic)
 
     def publish_module_diagnostics(
         self,
@@ -332,7 +302,6 @@ class MqttBridgeClient:
                     "skipped": len(skipped),
                     "unsupported": len(unsupported),
                     "device_grouping": self.config.device_grouping,
-                    "fancoil_entity_mode": self.config.fancoil_entity_mode,
                 }
             ),
             retain=True,
@@ -386,97 +355,23 @@ class MqttBridgeClient:
     def publish_status(self, status: DeviceStatus) -> None:
         topic_base = f"{self.config.bridge_id}/{slugify(status.addr)}"
         state_topic = f"{topic_base}/state"
+        device = self._devices_by_addr.get(status.addr)
+
+        if device and device.type == "fancoil":
+            status_data = self._status_dict(status)
+            state = self._fancoil_state_from_status(status_data)
+            self.client.publish(state_topic, state, retain=True)
+            self.client.publish(f"{topic_base}/attributes", json.dumps(status.raw), retain=True)
+            self.client.publish(f"{state_topic}_raw", json.dumps(status.raw), retain=True)
+            return
+
         self.client.publish(state_topic, normalize_state(status.value), retain=True)
         self.client.publish(f"{state_topic}_raw", json.dumps(status.raw), retain=True)
 
-        device = self._devices_by_addr.get(status.addr)
         if device and device.type == "dimmer-lamp":
             level = self._extract_level(status.value)
             if level is not None:
                 self.client.publish(f"{topic_base}/brightness/state", str(level), retain=True)
-
-        if device and device.type == "fancoil":
-            if self.config.fancoil_entity_mode == "climate":
-                self._publish_fancoil_climate_status(topic_base, status)
-            else:
-                self._publish_fancoil_fan_status(topic_base, status)
-
-    def _publish_fancoil_fan_status(self, topic_base: str, status: DeviceStatus) -> None:
-        status_data = self._status_dict(status)
-        fan_level = self._extract_numeric(status_data, "fan", "fan_level", "level")
-
-        self.client.publish(
-            f"{topic_base}/state",
-            self._fancoil_state_from_status(status_data, fan_level),
-            retain=True,
-        )
-
-        if fan_level is not None:
-            fan_speed = self._fan_speed_from_level(fan_level)
-            self.client.publish(
-                f"{topic_base}/percentage/state",
-                str(fan_speed),
-                retain=True,
-            )
-            self.client.publish(
-                f"{topic_base}/preset_mode/state",
-                self._fan_preset_from_speed(fan_speed),
-                retain=True,
-            )
-
-        self.client.publish(f"{topic_base}/attributes", json.dumps(status.raw), retain=True)
-
-    def _publish_fancoil_climate_status(self, topic_base: str, status: DeviceStatus) -> None:
-        status_data = self._status_dict(status)
-
-        mode = self._extract_fancoil_mode(status_data)
-        if mode:
-            self.client.publish(f"{topic_base}/mode/state", mode, retain=True)
-
-        current_temperature = self._extract_numeric(
-            status_data,
-            "current",
-            "current_temperature",
-            "temperature",
-            "t_cur",
-            "t-current",
-        )
-        if current_temperature is not None:
-            self.client.publish(
-                f"{topic_base}/current_temperature/state",
-                str(current_temperature),
-                retain=True,
-            )
-
-        target_temperature = self._extract_numeric(
-            status_data,
-            "target",
-            "target_temperature",
-            "setpoint",
-            "t_set",
-            "t-set",
-            "temperature-level",
-        )
-        if target_temperature is not None:
-            self.client.publish(
-                f"{topic_base}/target_temperature/state",
-                str(target_temperature),
-                retain=True,
-            )
-
-        fan_level = self._extract_numeric(status_data, "fan", "fan_level", "level")
-        if fan_level is not None:
-            self.client.publish(
-                f"{topic_base}/fan_mode/state",
-                self._fan_preset_from_level(fan_level),
-                retain=True,
-            )
-
-        preset = status_data.get("automation") or status_data.get("preset")
-        if isinstance(preset, str) and preset.strip():
-            self.client.publish(f"{topic_base}/preset/state", preset.strip(), retain=True)
-
-        self.client.publish(f"{topic_base}/attributes", json.dumps(status.raw), retain=True)
 
     @staticmethod
     def _status_dict(status: DeviceStatus) -> dict[str, Any]:
@@ -490,72 +385,13 @@ class MqttBridgeClient:
         return status.raw
 
     @staticmethod
-    def _fancoil_state_from_status(status_data: dict[str, Any], fan_level: float | None) -> str:
+    def _fancoil_state_from_status(status_data: dict[str, Any]) -> str:
         state = str(status_data.get("state", "")).lower().strip()
-        if state in {"off", "0", "false"}:
-            return "OFF"
-        if fan_level is not None:
-            return "ON" if fan_level > 0 else "OFF"
         if state in {"on", "1", "true"}:
             return "ON"
-        return "OFF"
-
-    @staticmethod
-    def _extract_fancoil_mode(status_data: dict[str, Any]) -> str | None:
-        state = str(status_data.get("state", "")).lower().strip()
         if state in {"off", "0", "false"}:
-            return "off"
-
-        mode = str(status_data.get("mode", "")).lower().strip()
-        if mode in {"heat", "cool"}:
-            return mode
-
-        if state in {"on", "1", "true"}:
-            return "heat"
-
-        return None
-
-    @staticmethod
-    def _extract_numeric(status_data: dict[str, Any], *keys: str) -> float | None:
-        for key in keys:
-            value = status_data.get(key)
-            if value is None:
-                continue
-            try:
-                return round(float(value), 2)
-            except (TypeError, ValueError):
-                continue
-        return None
-
-    @staticmethod
-    def _fan_speed_from_level(level: float) -> int:
-        if level <= 0:
-            return 0
-        if level > 100:
-            if level <= 125:
-                return 1
-            if level <= 210:
-                return 2
-            return 3
-        if level <= 40:
-            return 1
-        if level <= 75:
-            return 2
-        return 3
-
-    @classmethod
-    def _fan_preset_from_level(cls, level: float) -> str:
-        return cls._fan_preset_from_speed(cls._fan_speed_from_level(level))
-
-    @staticmethod
-    def _fan_preset_from_speed(speed: int) -> str:
-        if speed <= 0:
-            return "off"
-        if speed == 1:
-            return "low"
-        if speed == 2:
-            return "medium"
-        return "high"
+            return "OFF"
+        return "OFF"
 
     @staticmethod
     def _extract_level(value) -> int | None:
