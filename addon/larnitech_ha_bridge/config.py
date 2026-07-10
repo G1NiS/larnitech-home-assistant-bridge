@@ -23,24 +23,10 @@ class BridgeConfig(BaseModel):
     log_level: Literal["debug", "info", "warning", "error"] = "info"
 
     # Home Assistant device grouping:
-    # - area: one HA device per Larnitech area/room, similar to Hikvision camera grouping
-    # - bridge: one HA device for the whole Larnitech system, similar to Paradox
-    # - entity: one HA device per Larnitech item, legacy v0.1.1 behavior
+    # - area: one HA device per Larnitech area/room
+    # - bridge: one HA device for the whole Larnitech system
+    # - entity: one HA device per Larnitech item
     device_grouping: Literal["area", "bridge", "entity"] = "bridge"
-
-    # Fancoil entity model:
-    # - fan: universal safe default when heat/cool is controlled outside Larnitech
-    # - climate: expose Larnitech fancoils as climate devices for pure-Larnitech installations
-    fancoil_entity_mode: Literal["fan", "climate"] = "fan"
-
-    # Diagnostic logging for fancoil reverse-engineering. When enabled, the bridge logs
-    # native Larnitech fancoil status updates and the latest known status before/after
-    # Home Assistant fancoil commands.
-    fancoil_debug: bool = False
-
-    # Full API2 diagnostics. When enabled, the bridge dumps the complete get-devices
-    # response and every raw status-subscribe message without filtering by area/type.
-    full_api_dump: bool = False
 
     ignored_areas: list[str] = Field(default_factory=list)
     ignored_types: list[str] = Field(default_factory=list)
@@ -79,11 +65,6 @@ def load_config() -> BridgeConfig:
             "bridge_id": os.getenv("BRIDGE_ID", "larnitech"),
             "log_level": os.getenv("LOG_LEVEL", "info"),
             "device_grouping": os.getenv("DEVICE_GROUPING", "bridge"),
-            "fancoil_entity_mode": os.getenv("FANCOIL_ENTITY_MODE", "fan"),
-            "fancoil_debug": os.getenv("FANCOIL_DEBUG", "false").lower()
-            in {"1", "true", "yes", "on"},
-            "full_api_dump": os.getenv("FULL_API_DUMP", "false").lower()
-            in {"1", "true", "yes", "on"},
         }
 
     if not raw.get("larnitech_api_key"):
