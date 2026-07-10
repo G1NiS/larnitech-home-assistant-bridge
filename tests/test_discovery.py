@@ -51,7 +51,7 @@ def test_illumination_sensor_maps_to_sensor():
     assert payload["unit_of_measurement"] == "lx"
 
 
-def test_fancoil_maps_to_fan_by_default():
+def test_fancoil_maps_to_on_off_fan():
     device = LarnitechDevice(
         addr="415:52",
         name="Miegamasis",
@@ -66,39 +66,17 @@ def test_fancoil_maps_to_fan_by_default():
     assert payload is not None
     assert payload["command_topic"] == "larnitech/415_52/set"
     assert payload["state_topic"] == "larnitech/415_52/state"
-    assert payload["preset_mode_command_topic"] == "larnitech/415_52/preset_mode/set"
-    assert payload["preset_mode_state_topic"] == "larnitech/415_52/preset_mode/state"
-    assert payload["percentage_command_topic"] == "larnitech/415_52/percentage/set"
-    assert payload["percentage_state_topic"] == "larnitech/415_52/percentage/state"
-    assert payload["speed_range_min"] == 1
-    assert payload["speed_range_max"] == 3
-    assert payload["preset_modes"] == ["off", "low", "medium", "high"]
-    assert "current_temperature_topic" not in payload
+    assert payload["payload_on"] == "ON"
+    assert payload["payload_off"] == "OFF"
+    assert payload["state_on"] == "ON"
+    assert payload["state_off"] == "OFF"
+    assert payload["json_attributes_topic"] == "larnitech/415_52/attributes"
+    assert "percentage_command_topic" not in payload
+    assert "percentage_state_topic" not in payload
+    assert "preset_mode_command_topic" not in payload
+    assert "preset_mode_state_topic" not in payload
+    assert "fan_mode_command_topic" not in payload
     assert "mode_command_topic" not in payload
-
-
-def test_fancoil_can_map_to_climate_when_configured():
-    device = LarnitechDevice(
-        addr="415:52",
-        name="Miegamasis",
-        type="fancoil",
-        area="Setup",
-        raw={
-            "automations": ["Mode", "Comfort", "Off", "Eco", "Fast"],
-            "status": {"state": "on", "current": 23.1, "fan": 33.2, "mode": "heat"},
-        },
-    )
-
-    assert entity_component(device, fancoil_entity_mode="climate") == "climate"
-    payload = discovery_payload("larnitech", device, fancoil_entity_mode="climate")
-
-    assert payload is not None
-    assert payload["mode_command_topic"] == "larnitech/415_52/mode/set"
-    assert payload["mode_state_topic"] == "larnitech/415_52/mode/state"
-    assert payload["current_temperature_topic"] == "larnitech/415_52/current_temperature/state"
-    assert payload["fan_mode_command_topic"] == "larnitech/415_52/fan_mode/set"
-    assert payload["fan_modes"] == ["off", "low", "medium", "high"]
-    assert payload["preset_modes"] == ["Mode", "Comfort", "Off", "Eco", "Fast"]
 
 
 def test_normalize_dict_state():
@@ -172,7 +150,7 @@ def test_command_payload_for_dimmer_brightness():
     assert larnitech_status_for_command(device, "42", "brightness") == {"level": 42}
 
 
-def test_command_payload_for_fancoil_three_speeds():
+def test_command_payload_for_fancoil_on_off_only():
     from larnitech_ha_bridge.commands import larnitech_status_for_command
 
     device = LarnitechDevice(
@@ -182,13 +160,13 @@ def test_command_payload_for_fancoil_three_speeds():
         area="Setup",
         raw={},
     )
-    assert larnitech_status_for_command(device, "OFF", "state") == "0x00"
-    assert larnitech_status_for_command(device, "ON", "state") == "0x01FA"
-    assert larnitech_status_for_command(device, "low", "fan_mode") == "0x0153"
-    assert larnitech_status_for_command(device, "medium", "fan_mode") == "0x01A6"
-    assert larnitech_status_for_command(device, "high", "fan_mode") == "0x01FA"
-    assert larnitech_status_for_command(device, "1", "preset") == "0x0153"
-    assert larnitech_status_for_command(device, "2", "preset") == "0x01A6"
-    assert larnitech_status_for_command(device, "3", "preset") == "0x01FA"
-    assert larnitech_status_for_command(device, "35", "fan_mode") == "0x01A6"
-    assert larnitech_status_for_command(device, "0", "fan_mode") == "0x00"
+    assert larnitech_status_for_command(device, "OFF", "state") == {"state": "off"}
+    assert larnitech_status_for_command(device, "ON", "state") == {"state": "on"}
+    # Stale retained speed topics from older releases are safely degraded to ON/OFF.
+    assert larnitech_status_for_command(device, "low", "fan_mode") == {"state": "on"}
+    assert larnitech_status_for_command(device, "medium", "fan_mode") == {"state": "on"}
+    assert larnitech_status_for_command(device, "high", "fan_mode") == {"state": "on"}
+    assert larnitech_status_for_command(device, "1", "preset") == {"state": "on"}
+    assert larnitech_status_for_command(device, "2", "preset") == {"state": "on"}
+    assert larnitech_status_for_command(device, "3", "preset") == {"state": "on"}
+    assert larnitech_status_for_command(device, "0", "fan_mode") == {"state": "off"}
