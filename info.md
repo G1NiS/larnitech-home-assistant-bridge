@@ -7,6 +7,7 @@ Local Home Assistant integration for Larnitech-compatible smart home systems.
 The HACS version is the free community baseline:
 
 - local API2 WebSocket connection;
+- native Home Assistant entities;
 - lights and dimmers;
 - common sensors and binary sensors;
 - valves and switches;
@@ -14,4 +15,4 @@ The HACS version is the free community baseline:
 
 ## Commercial support
 
-Paid installer support, diagnostics, mapping work and custom HVAC logic can be offered separately. The public HACS integration does not require a license key.
+Paid installer support, diagnostics, mapping work, dashboard work and custom HVAC logic can be offered separately. The public HACS integration does not require a license key.
