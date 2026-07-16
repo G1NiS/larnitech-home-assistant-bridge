@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Larnitech",
+        "description": "Connect Home Assistant to a Larnitech-compatible controller through local API2 WebSocket.",
+        "data": {
+          "host": "Host",
+          "port": "API2 port",
+          "api_key": "API2 key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect or authorize with the Larnitech controller. Check host, port and API2 key."
+    },
+    "abort": {
+      "already_configured": "This Larnitech controller is already configured."
+    }
+  }
+}
