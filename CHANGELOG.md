@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.1.24 - 2026-07-09
+
+### Added
+
+- Added HACS custom integration baseline under `custom_components/larnitech`.
+- Added Home Assistant config flow for host, API2 port and API2 key.
+- Added native Home Assistant platforms:
+  - `light`
+  - `fan`
+  - `sensor`
+  - `binary_sensor`
+  - `switch`
+- Added HACS metadata with `hacs.json` and `info.md`.
+- Added HACS and Hassfest validation workflows.
+- Added translation files for the config flow.
+- Added funding metadata for service-based monetization.
+- Added custom SVG brand icon draft under `brand/icon.svg`.
+
+### Notes
+
+- Public HACS baseline is free and does not require a license key.
+- Fancoils are exposed as ON/OFF fan entities only.
+- Add binary `brand/icon.png` before submitting as a HACS default repository.
+
+## 0.1.23 - 2026-07-09
+
+### Changed
+
+- Cleaned up experimental fancoil speed, climate, raw hex, full API dump and fancoil debug paths in the add-on/MQTT bridge.
+- Fancoils are exposed as ON/OFF fan entities only.
+
+## Earlier add-on changelog
+
 The Home Assistant add-on changelog is maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 
 ## 0.1.13 - 2026-07-07
