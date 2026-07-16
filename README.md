@@ -1,33 +1,116 @@
 # Larnitech HA Bridge
 
-Unofficial Home Assistant add-on bridge for Larnitech-compatible smart home systems.
+Unofficial Home Assistant integration and add-on bridge for Larnitech-compatible smart home systems.
 
-It connects to **Larnitech API2 WebSocket**, reads devices/status updates, and publishes them to **Home Assistant through MQTT Discovery**.
+The project provides two public installation paths:
+
+1. **HACS custom integration** — recommended public/community installation path.
+2. **Home Assistant add-on** — legacy/MQTT bridge path for users who prefer MQTT Discovery.
 
 > This project is not affiliated with, endorsed by, or sponsored by Larnitech or Home Assistant.  
 > Larnitech and Home Assistant are trademarks of their respective owners.
 
 ## Current status
 
-Current add-on version: **0.1.23**
+Current version: **0.1.23**
 
-This is an early community release. It is intended for users who are comfortable with Home Assistant add-ons, MQTT Discovery, and Larnitech API2 configuration.
+This is an early community release. It is intended for users who are comfortable with Home Assistant, HACS, local network integrations and Larnitech API2 configuration.
 
-### Current scope
+### Public Community Edition
 
-- Connects to Larnitech API2 WebSocket.
+The public HACS integration is free and does not require a license key.
+
+Current public scope:
+
+- Connects locally to Larnitech API2 WebSocket.
 - Requests the full device list.
 - Subscribes to live status updates.
-- Publishes Home Assistant MQTT Discovery entities.
-- Groups all entities under one Home Assistant device by default.
-- Filters internal `Setup` items and physical input switches by default.
-- Forwards Home Assistant MQTT commands back to Larnitech.
+- Creates native Home Assistant entities.
 - Supports lights and dimmers.
 - Supports common sensors and binary sensors.
+- Supports valves and switches.
 - Exposes Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
-- Publishes optional module diagnostics.
+
+### Commercial support / monetization
+
+The recommended monetization model is services around the public integration, not locking the baseline integration:
+
+- paid installer support;
+- remote setup and troubleshooting;
+- Larnitech-to-Home Assistant mapping work;
+- custom dashboards;
+- HVAC logic design;
+- project-specific diagnostics;
+- priority support;
+- optional future Pro/Installer package.
+
+GitHub Sponsors metadata is included in `.github/FUNDING.yml`. Replace or extend it with the final sponsor/support links before public launch.
 
 Full release notes are maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
+
+## HACS custom integration installation
+
+1. Make the repository public.
+2. Open Home Assistant.
+3. Go to:
+
+```text
+HACS → Integrations → ⋮ → Custom repositories
+```
+
+4. Add this repository URL:
+
+```text
+https://github.com/G1NiS/larnitech-home-assistant-bridge
+```
+
+5. Select repository type:
+
+```text
+Integration
+```
+
+6. Download the integration.
+7. Restart Home Assistant.
+8. Go to:
+
+```text
+Settings → Devices & services → Add integration → Larnitech
+```
+
+9. Enter:
+
+```text
+Host
+API2 port
+API2 key
+```
+
+## HACS publishing checklist
+
+The repository is structured for HACS as an integration repository:
+
+```text
+custom_components/larnitech/__init__.py
+custom_components/larnitech/manifest.json
+custom_components/larnitech/config_flow.py
+README.md
+hacs.json
+```
+
+Required HACS/HA metadata included:
+
+- `hacs.json`
+- `custom_components/larnitech/manifest.json`
+- `custom_components/larnitech/strings.json`
+- `custom_components/larnitech/translations/en.json`
+- HACS validation GitHub Action
+- Hassfest GitHub Action
+- `info.md`
+- funding metadata
+- custom SVG brand icon draft in `brand/icon.svg`
+
+Before submitting as a HACS default repository, add a binary `brand/icon.png`. The current repository contains a text-based SVG draft because binary PNG upload is not available through the current automation channel.
 
 ## Supported items
 
@@ -35,7 +118,7 @@ Full release notes are maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 |---|---|---|
 | `lamp` | `light` | ON/OFF |
 | `dimmer-lamp` | `light` | ON/OFF + brightness |
-| `switch` | `switch` | ON/OFF, hidden by default when used as input switches |
+| `switch` | `switch` | ON/OFF |
 | `valve` | `switch` | ON/OFF |
 | `valve-heating` | `switch` | ON/OFF |
 | `temperature-sensor` | `sensor` | read-only |
@@ -45,39 +128,35 @@ Full release notes are maintained in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 | `door-sensor` | `binary_sensor` | read-only |
 | `leak-sensor` | `binary_sensor` | read-only |
 | `fancoil` | `fan` | ON/OFF only |
-| `light-scheme` | `button` | optional, disabled by default |
-| `script` | `button` | optional, disabled by default |
 
 ## Known limitations
 
 - Fancoil Low / Medium / High speed control is **not advertised** in Home Assistant.
 - Fancoils are intentionally exposed as simple ON/OFF fan entities.
-- On the tested installation, Larnitech API2 accepted fancoil speed payloads but restored runtime speed back to `fan=100.0`; therefore speed control was removed from public discovery.
-- Heat/cool mode for fancoils is not exposed as a Home Assistant `climate` entity in this public baseline.
-- This add-on does not replace a full HVAC controller. Use Home Assistant automations or the native heating/cooling system for higher-level HVAC logic.
+- On the tested installation, Larnitech API2 accepted fancoil speed payloads but restored runtime speed back to `fan=100.0`; therefore speed control was removed from the public baseline.
+- Heat/cool mode for fancoils is not exposed as a Home Assistant `climate` entity.
+- This integration does not replace a full HVAC controller. Use Home Assistant automations or the native heating/cooling system for higher-level HVAC logic.
 
-## Architecture
+## Architecture — HACS integration
 
 ```text
+Home Assistant custom integration
+        ↓
 Larnitech API2 WebSocket
         ↓
-Larnitech HA Bridge add-on
-        ↓
-MQTT Discovery + MQTT state/command topics
-        ↓
-Home Assistant
+Larnitech controller
 ```
 
-The bridge uses two API2 WebSocket connections:
+The HACS integration uses two API2 WebSocket connections:
 
 ```text
 status WebSocket  -> get-devices, status-subscribe, live status events
-command WebSocket -> status-set commands from Home Assistant/MQTT
+command WebSocket -> status-set commands from Home Assistant entities
 ```
 
-This avoids concurrent WebSocket receive calls and keeps command handling separated from the live status stream.
-
 ## Home Assistant add-on installation
+
+The add-on/MQTT bridge is still available for users who prefer MQTT Discovery.
 
 1. Open Home Assistant.
 2. Go to:
@@ -97,7 +176,7 @@ https://github.com/G1NiS/larnitech-home-assistant-bridge
 6. Start the add-on.
 7. Make sure the MQTT integration is enabled in Home Assistant.
 
-## Example configuration
+### Add-on example configuration
 
 ```yaml
 larnitech_host: "192.168.xxx.xxx"
@@ -125,7 +204,7 @@ prefix_entity_names_with_area: true
 publish_module_diagnostics: true
 ```
 
-## Configuration options
+## Add-on configuration options
 
 | Option | Default | Description |
 |---|---:|---|
@@ -150,37 +229,6 @@ publish_module_diagnostics: true
 | `prefix_entity_names_with_area` | `true` | Prefix entity names with Larnitech area when using bridge grouping. |
 | `publish_module_diagnostics` | `true` | Publish diagnostic module summary sensors. |
 
-## Device grouping modes
-
-Default mode:
-
-```yaml
-device_grouping: "bridge"
-prefix_entity_names_with_area: true
-```
-
-This creates one Home Assistant MQTT device named **Larnitech Smart House**. Entities are named with the room prefix, for example:
-
-```text
-Virtuvė · Salos šviestuvai
-Tėvų WC · WC spot
-Beno kambarys · LED
-```
-
-Alternative modes:
-
-```yaml
-device_grouping: "area"
-```
-
-Creates one Home Assistant device per Larnitech area/room.
-
-```yaml
-device_grouping: "entity"
-```
-
-Creates one Home Assistant device per Larnitech item.
-
 ## Fancoils
 
 Larnitech `type="fancoil"` items are exposed as Home Assistant `fan` entities with only:
@@ -199,37 +247,6 @@ climate entity controls
 ```
 
 Rationale: API2 speed writes were accepted by Larnitech but did not reliably change physical fan speed on the tested installation. The stable public behaviour is therefore ON/OFF only.
-
-The raw Larnitech status is still published as JSON attributes, so users can inspect the values returned by their installation.
-
-## Diagnostics
-
-When enabled:
-
-```yaml
-publish_module_diagnostics: true
-```
-
-The bridge publishes diagnostic sensors with discovered module information based on Larnitech address prefixes and cfgid values.
-
-Useful diagnostic entities include:
-
-```text
-Larnitech Modules
-Larnitech Published entities
-```
-
-## Updating from earlier test versions
-
-After updating from versions that exposed fancoil speeds or climate entities:
-
-1. Update the add-on to the latest version.
-2. Restart the add-on.
-3. Reload the Home Assistant MQTT integration.
-4. If stale fancoil speed/climate entities remain, restart Home Assistant.
-5. If needed, delete stale MQTT entities and let Discovery recreate them.
-
-The add-on clears retained legacy MQTT discovery topics when `cleanup_legacy_mqtt: true` is enabled.
 
 ## Security notes
 
@@ -259,11 +276,3 @@ Run linting:
 ```bash
 ruff check .
 ```
-
-## License
-
-Licensed under the Apache License, Version 2.0. See [`LICENSE`](LICENSE).
-
-## Legal
-
-This project is not affiliated with, endorsed by, or sponsored by Larnitech or Home Assistant. Product names and trademarks belong to their respective owners.
