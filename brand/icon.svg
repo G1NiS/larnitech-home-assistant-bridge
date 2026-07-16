@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Larnitech HA Bridge icon">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M56 132 128 72l72 60v68a8 8 0 0 1-8 8h-44v-48h-40v48H64a8 8 0 0 1-8-8v-68Z" fill="#fff" opacity="0.96"/>
+  <path d="M76 134 128 91l52 43" fill="none" stroke="#0f172a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"/>
+  <circle cx="74" cy="70" r="14" fill="#fff" opacity="0.95"/>
+  <circle cx="182" cy="70" r="14" fill="#fff" opacity="0.95"/>
+  <circle cx="128" cy="42" r="14" fill="#fff" opacity="0.95"/>
+  <path d="M88 70h26M142 70h26M128 56v22" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity="0.95"/>
+</svg>
