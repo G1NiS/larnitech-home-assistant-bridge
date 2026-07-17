@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -13,6 +14,25 @@ from .models import DeviceStatus, LarnitechDevice
 _LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[[DeviceStatus], None]
+SETUP_AREA = "Setup"
+
+
+def _is_setup_area(area: str | None) -> bool:
+    return area is None or not area.strip() or area.strip().lower() == SETUP_AREA.lower()
+
+
+def _relation_addrs(raw: dict[str, Any]) -> list[str]:
+    addrs: list[str] = []
+    for key in ("linked", "contains", "items", "refs", "item_refs"):
+        value = raw.get(key)
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, dict) and item.get("addr"):
+                addrs.append(str(item["addr"]))
+            elif isinstance(item, str):
+                addrs.append(item)
+    return addrs
 
 
 class LarnitechHub:
@@ -33,7 +53,7 @@ class LarnitechHub:
     async def async_setup(self) -> None:
         await self._command_api.connect()
         await self._status_api.connect()
-        self.devices = await self._status_api.get_devices()
+        self.devices = self._with_inferred_areas(await self._status_api.get_devices())
         self.devices_by_addr = {device.addr: device for device in self.devices}
         for device in self.devices:
             if "status" in device.raw:
@@ -66,6 +86,38 @@ class LarnitechHub:
             listeners.discard(listener)
 
         return remove
+
+    @staticmethod
+    def _with_inferred_areas(devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
+        """Infer useful areas for linked physical items.
+
+        API2 already exposes an `area` field for most logical items. Some physical
+        inputs remain in `Setup` but have `linked` targets. In those cases the
+        switch is grouped with the first linked target that has a non-Setup area.
+        """
+        area_by_addr = {
+            device.addr: device.area
+            for device in devices
+            if device.area is not None and not _is_setup_area(device.area)
+        }
+        enriched: list[LarnitechDevice] = []
+        for device in devices:
+            if not _is_setup_area(device.area):
+                enriched.append(device)
+                continue
+
+            inferred_area = None
+            for addr in _relation_addrs(device.raw):
+                related_area = area_by_addr.get(addr)
+                if related_area:
+                    inferred_area = related_area
+                    break
+
+            if inferred_area:
+                enriched.append(replace(device, area=inferred_area))
+            else:
+                enriched.append(device)
+        return enriched
 
     async def _status_loop(self) -> None:
         while not self._closed:
