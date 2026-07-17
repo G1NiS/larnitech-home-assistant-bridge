@@ -26,20 +26,6 @@ Current public scope:
 - Valves and switches.
 - Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
 
-## Commercial support / monetization
-
-Recommended monetization is service-based, while keeping the public baseline usable:
-
-- paid installer support;
-- remote setup and troubleshooting;
-- Larnitech-to-Home Assistant mapping work;
-- custom dashboards;
-- HVAC logic design;
-- priority support;
-- optional future Pro/Installer package.
-
-GitHub Sponsors metadata is included in `.github/FUNDING.yml`. Replace or extend it with final support links before launch.
-
 Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md). Add-on-specific release notes are in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
 
 ## HACS custom integration installation
@@ -94,7 +80,6 @@ Included metadata and validation:
 - `.github/workflows/validate-hacs.yml`
 - `.github/workflows/hassfest.yml`
 - `info.md`
-- `.github/FUNDING.yml`
 - custom SVG brand icon draft in `brand/icon.svg`
 
 Before submitting as a HACS default repository, add a binary `brand/icon.png`. The current repository contains an SVG draft because binary PNG upload is not available through this automation channel.
