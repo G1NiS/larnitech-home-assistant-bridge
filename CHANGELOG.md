@@ -10,6 +10,7 @@
 ### Changed
 
 - Generic Larnitech `switch` items are hidden by default because they are usually physical wall buttons or low-level controller inputs, not useful Home Assistant controls.
+- Changed the HACS validation workflow to manual-only to prevent failed publish-gate checks from spamming notifications during active development.
 
 ### Fixed
 
