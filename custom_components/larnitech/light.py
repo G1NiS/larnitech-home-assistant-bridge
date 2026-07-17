@@ -7,10 +7,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, TYPE_DIMMER, TYPE_LAMP
+from .const import DOMAIN, TYPE_DIMMER, TYPE_LAMP, TYPE_LIGHT
 from .entity import LarnitechEntity, numeric_value, state_is_on
 from .hub import LarnitechHub
 from .models import LarnitechDevice
+
+LIGHT_TYPES = {TYPE_LAMP, TYPE_LIGHT, TYPE_DIMMER}
 
 
 async def async_setup_entry(
@@ -19,7 +21,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     hub: LarnitechHub = hass.data[DOMAIN][entry.entry_id]
-    devices = [device for device in hub.devices if device.type in {TYPE_LAMP, TYPE_DIMMER}]
+    devices = [device for device in hub.devices if device.type in LIGHT_TYPES]
     async_add_entities([LarnitechLight(hub, device) for device in devices])
 
 
