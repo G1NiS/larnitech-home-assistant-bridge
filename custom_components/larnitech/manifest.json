@@ -1,6 +1,6 @@
 {
   "domain": "larnitech",
-  "name": "Larnitech",
+  "name": "Larnitech HA Bridge",
   "codeowners": ["@G1NiS"],
   "config_flow": true,
   "dependencies": [],
@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/G1NiS/larnitech-home-assistant-bridge/issues",
   "loggers": ["websockets"],
   "requirements": ["websockets>=12.0"],
-  "version": "0.1.25"
+  "version": "0.1.26"
 }
