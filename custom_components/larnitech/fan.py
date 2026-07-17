@@ -23,7 +23,8 @@ async def async_setup_entry(
 
 
 class LarnitechFancoil(LarnitechEntity, FanEntity):
-    _attr_supported_features = FanEntityFeature(0)
+    _attr_supported_features = FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
+    _enable_turn_on_off_backwards_compatibility = False
 
     @property
     def is_on(self) -> bool | None:
