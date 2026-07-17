@@ -1,5 +1,7 @@
 # Larnitech HA Bridge
 
+![Larnitech HA Bridge](brand/icon.png)
+
 Local-first Home Assistant integration for Larnitech-compatible smart home systems.
 
 The integration connects to a local Larnitech API2 WebSocket controller and exposes supported Larnitech items as native Home Assistant entities.
@@ -13,7 +15,8 @@ The integration connects to a local Larnitech API2 WebSocket controller and expo
 - Valves and switches.
 - Fan-coils as simple ON/OFF fan entities.
 - Room/area-based device grouping when Larnitech area metadata is available.
-- Dedicated light groups section for Larnitech light schemes.
+- Setup/unassigned items are exposed under a dedicated Setup area device.
+- Dedicated light groups section for Larnitech light schemes and virtual grouped lights.
 
 ## Notes
 
