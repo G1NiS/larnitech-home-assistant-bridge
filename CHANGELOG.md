@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.30 - 2026-07-17
+
+### Changed
+
+- Removed the `Larnitech ·` prefix from area/room device names in Home Assistant.
+- Room devices now use clean names such as `Svetainė`, `Darbo kambarys`, `Setup` and `Light groups`.
+
 ## 0.1.29 - 2026-07-17
 
 ### Fixed
