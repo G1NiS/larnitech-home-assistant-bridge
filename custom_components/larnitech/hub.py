@@ -36,11 +36,23 @@ def _relation_addrs(raw: dict[str, Any]) -> list[str]:
 
 
 class LarnitechHub:
-    def __init__(self, hass: HomeAssistant, host: str, port: int, api_key: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        host: str,
+        port: int,
+        api_key: str,
+        area_overrides: dict[str, str] | None = None,
+    ) -> None:
         self.hass = hass
         self.host = host
         self.port = port
         self.api_key = api_key
+        self.area_overrides = {
+            str(addr).strip(): str(area).strip()
+            for addr, area in (area_overrides or {}).items()
+            if str(addr).strip() and str(area).strip()
+        }
         self.devices: list[LarnitechDevice] = []
         self.devices_by_addr: dict[str, LarnitechDevice] = {}
         self.status_by_addr: dict[str, Any] = {}
@@ -53,7 +65,9 @@ class LarnitechHub:
     async def async_setup(self) -> None:
         await self._command_api.connect()
         await self._status_api.connect()
-        self.devices = self._with_inferred_areas(await self._status_api.get_devices())
+        devices = await self._status_api.get_devices()
+        devices = self._with_area_overrides(devices)
+        self.devices = self._with_inferred_areas(devices)
         self.devices_by_addr = {device.addr: device for device in self.devices}
         for device in self.devices:
             if "status" in device.raw:
@@ -86,6 +100,16 @@ class LarnitechHub:
             listeners.discard(listener)
 
         return remove
+
+    def _with_area_overrides(self, devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
+        if not self.area_overrides:
+            return devices
+
+        enriched: list[LarnitechDevice] = []
+        for device in devices:
+            area = self.area_overrides.get(device.addr)
+            enriched.append(replace(device, area=area) if area else device)
+        return enriched
 
     @staticmethod
     def _with_inferred_areas(devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
