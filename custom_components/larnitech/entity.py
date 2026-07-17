@@ -1,13 +1,52 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
+from .const import DOMAIN, TYPE_LIGHT_SCHEME
 from .hub import LarnitechHub
 from .models import DeviceStatus, LarnitechDevice
+
+
+def _slugify(value: str) -> str:
+    value = value.lower().strip()
+    value = re.sub(r"[^a-z0-9_]+", "_", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value or "unknown"
+
+
+def larnitech_area(device: LarnitechDevice) -> str:
+    area = (device.area or "Setup").strip()
+    return area or "Setup"
+
+
+def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
+    """Return the Home Assistant device grouping for a Larnitech item.
+
+    Larnitech installations are normally organised by areas/rooms. Exposing one
+    Home Assistant device per area keeps the integration usable: room entities are
+    grouped together and Setup/unassigned items are still visible instead of being
+    hidden inside a single large bridge device.
+    """
+    if device.type == TYPE_LIGHT_SCHEME:
+        return DeviceInfo(
+            identifiers={(DOMAIN, "light_groups")},
+            name="Larnitech · Light groups",
+            manufacturer="Larnitech-compatible",
+            model="Light schemes / grouped lights",
+        )
+
+    area = larnitech_area(device)
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"area_{_slugify(area)}")},
+        name=f"Larnitech · {area}",
+        manufacturer="Larnitech-compatible",
+        model="Area / room",
+        suggested_area=area,
+    )
 
 
 class LarnitechEntity(Entity):
@@ -18,11 +57,7 @@ class LarnitechEntity(Entity):
         self.device = device
         self._attr_unique_id = f"{DOMAIN}_{device.addr.replace(':', '_')}"
         self._attr_name = device.name
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "bridge")},
-            name="Larnitech Smart House",
-            manufacturer="Larnitech-compatible",
-        )
+        self._attr_device_info = larnitech_device_info(device)
         self._unsubscribe = None
 
     @property
@@ -30,9 +65,8 @@ class LarnitechEntity(Entity):
         attrs: dict[str, Any] = {
             "addr": self.device.addr,
             "larnitech_type": self.device.type,
+            "larnitech_area": larnitech_area(self.device),
         }
-        if self.device.area:
-            attrs["area"] = self.device.area
         return attrs
 
     async def async_added_to_hass(self) -> None:
