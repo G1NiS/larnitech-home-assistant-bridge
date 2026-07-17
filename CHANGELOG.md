@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.29 - 2026-07-17
+
+### Fixed
+
+- Fixed fan-coil ON/OFF service support by explicitly advertising `TURN_ON` and `TURN_OFF` fan features.
+- Fixed fan-coil state reporting when Larnitech reports `fan=100` while the explicit runtime `state` is `off`.
+
 ## 0.1.28 - 2026-07-17
 
 ### Added
