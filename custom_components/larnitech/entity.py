@@ -45,7 +45,7 @@ def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
     if is_grouped_light(device):
         return DeviceInfo(
             identifiers={(DOMAIN, "light_groups")},
-            name="Larnitech · Light groups",
+            name="Light groups",
             manufacturer="Larnitech-compatible",
             model="Light schemes / grouped lights",
         )
@@ -53,9 +53,9 @@ def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
     area = larnitech_area(device)
     return DeviceInfo(
         identifiers={(DOMAIN, f"area_{_slugify(area)}")},
-        name=f"Larnitech · {area}",
+        name=area,
         manufacturer="Larnitech-compatible",
-        model="Area / room",
+        model="Larnitech area / room",
         suggested_area=area,
     )
 
