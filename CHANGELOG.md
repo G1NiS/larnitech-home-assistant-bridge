@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.28 - 2026-07-17
+
+### Added
+
+- Added Home Assistant button platform for Larnitech `light-scheme` items.
+- Added a dedicated `Larnitech · Light groups` device for grouped lighting / light schemes.
+- Added room/area-based Home Assistant device grouping for Larnitech items.
+- Added `Larnitech · Setup` grouping for items without room metadata.
+- Improved public README and HACS `info.md` descriptions.
+
+### Changed
+
+- Generic Larnitech `light` items are now mapped as Home Assistant `light` entities.
+
 ## 0.1.27 - 2026-07-17
 
 ### Fixed
