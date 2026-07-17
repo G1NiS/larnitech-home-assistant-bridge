@@ -17,9 +17,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    host = entry.data["host"]
+    if not entry.title.startswith("Larnitech HA Bridge"):
+        hass.config_entries.async_update_entry(entry, title=f"Larnitech HA Bridge ({host})")
+
     hub = LarnitechHub(
         hass=hass,
-        host=entry.data["host"],
+        host=host,
         port=entry.data["port"],
         api_key=entry.data["api_key"],
     )
