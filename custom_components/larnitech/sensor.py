@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfIlluminance, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -12,6 +12,7 @@ from .hub import LarnitechHub
 from .models import LarnitechDevice
 
 SENSOR_TYPES = {TYPE_TEMPERATURE, TYPE_HUMIDITY, TYPE_ILLUMINATION}
+UNIT_LUX = "lx"
 
 
 async def async_setup_entry(
@@ -37,7 +38,7 @@ class LarnitechSensor(LarnitechEntity, SensorEntity):
             self._attr_native_unit_of_measurement = PERCENTAGE
         elif device.type == TYPE_ILLUMINATION:
             self._attr_device_class = SensorDeviceClass.ILLUMINANCE
-            self._attr_native_unit_of_measurement = UnitOfIlluminance.LUX
+            self._attr_native_unit_of_measurement = UNIT_LUX
 
     @property
     def native_value(self):
