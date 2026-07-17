@@ -15,8 +15,8 @@ The integration connects to a local Larnitech API2 WebSocket controller and expo
 - Valves and switches.
 - Fan-coils as simple ON/OFF fan entities.
 - Room/area-based device grouping when Larnitech area metadata is available.
-- Setup/unassigned items are exposed under a dedicated Setup area device.
-- Dedicated light groups section for Larnitech light schemes and virtual grouped lights.
+- Setup/unassigned items are exposed under a dedicated `Setup` area device.
+- Dedicated `Light groups` section for Larnitech light schemes and virtual grouped lights.
 
 ## Notes
 
