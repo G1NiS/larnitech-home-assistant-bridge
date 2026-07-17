@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, TYPE_FANCOIL
-from .entity import LarnitechEntity, numeric_value, state_is_on
+from .entity import LarnitechEntity, numeric_value, state_is_on, status_dict
 from .hub import LarnitechHub
 
 
@@ -29,9 +29,17 @@ class LarnitechFancoil(LarnitechEntity, FanEntity):
     @property
     def is_on(self) -> bool | None:
         status = self.status
-        fan_level = numeric_value(status, "fan", "fan_level", "level")
+        data = status_dict(status)
+
+        # Larnitech fancoils can report fan=100 even while state=off. Trust the
+        # explicit runtime state first, otherwise HA shows the fan as on when the
+        # physical fan-coil is actually off.
+        if "state" in data:
+            return state_is_on(data)
+
+        fan_level = numeric_value(data, "fan", "fan_level", "level")
         if fan_level is not None:
-            return fan_level > 0 or state_is_on(status)
+            return fan_level > 0
         return state_is_on(status)
 
     async def async_turn_on(
