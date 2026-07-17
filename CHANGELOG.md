@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.31 - 2026-07-17
+
+### Added
+
+- Added optional area overrides for Larnitech items that are reported under `Setup` but should appear under specific Home Assistant rooms.
+- Added integration options flow for editing area overrides after setup.
+
+### Changed
+
+- Generic Larnitech `switch` items are hidden by default because they are usually physical wall buttons or low-level controller inputs, not useful Home Assistant controls.
+
+### Fixed
+
+- Added cleanup for stale generic `switch` entity-registry entries created by older versions, reducing inactive switch spam after upgrade.
+
 ## 0.1.30 - 2026-07-17
 
 ### Changed
