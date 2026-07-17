@@ -10,7 +10,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, TYPE_FANCOIL
 from .entity import LarnitechEntity, numeric_value, state_is_on
 from .hub import LarnitechHub
-from .models import LarnitechDevice
 
 
 async def async_setup_entry(
