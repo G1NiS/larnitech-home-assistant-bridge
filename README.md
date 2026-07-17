@@ -12,7 +12,7 @@ The project provides two installation paths:
 
 ## Current status
 
-Current HACS integration version: **0.1.26**  
+Current HACS integration version: **0.1.27**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -57,7 +57,9 @@ Integration
 Settings → Devices & services → Add integration → Larnitech HA Bridge
 ```
 
-8. Enter the Larnitech connection details:
+8. Enter the Larnitech host, API2 port and API2 key.
+
+Example:
 
 ```text
 Host: 192.168.xxx.xxx
@@ -65,115 +67,4 @@ API2 port: 2041
 API2 key: your Larnitech API2 key
 ```
 
-Use the host or IP address only. Do not include `http://`, `ws://`, or `/api`.
-
-## HACS publishing checklist
-
-Repository structure:
-
-```text
-custom_components/larnitech/__init__.py
-custom_components/larnitech/manifest.json
-custom_components/larnitech/config_flow.py
-README.md
-hacs.json
-```
-
-Included metadata and validation:
-
-- `hacs.json`
-- `custom_components/larnitech/manifest.json`
-- `custom_components/larnitech/strings.json`
-- `custom_components/larnitech/translations/en.json`
-- `custom_components/larnitech/brand/icon.png`
-- `custom_components/larnitech/brand/logo.png`
-- `.github/workflows/validate-hacs.yml`
-- `.github/workflows/hassfest.yml`
-- `info.md`
-- `brand/icon.png`
-
-## Supported items
-
-| Larnitech type | Home Assistant entity | Control |
-|---|---|---|
-| `lamp` | `light` | ON/OFF |
-| `dimmer-lamp` | `light` | ON/OFF + brightness |
-| `switch` | `switch` | ON/OFF |
-| `valve` | `switch` | ON/OFF |
-| `valve-heating` | `switch` | ON/OFF |
-| `temperature-sensor` | `sensor` | read-only |
-| `humidity-sensor` | `sensor` | read-only |
-| `illumination-sensor` | `sensor` | read-only |
-| `motion-sensor` | `binary_sensor` | read-only |
-| `door-sensor` | `binary_sensor` | read-only |
-| `leak-sensor` | `binary_sensor` | read-only |
-| `fancoil` | `fan` | ON/OFF only |
-
-## Fancoils
-
-Larnitech `type="fancoil"` items are exposed as Home Assistant `fan` entities with only:
-
-```text
-ON
-OFF
-```
-
-The public baseline does not expose:
-
-```text
-Low / Medium / High
-heat / cool mode
-climate entity controls
-```
-
-Rationale: API2 speed writes were accepted by Larnitech but did not reliably change physical fan speed on the tested installation. The stable public behaviour is ON/OFF only.
-
-## Add-on / MQTT bridge
-
-The Home Assistant add-on remains available for users who prefer MQTT Discovery.
-
-Add-on repository URL:
-
-```text
-https://github.com/G1NiS/larnitech-home-assistant-bridge
-```
-
-Example add-on configuration:
-
-```yaml
-larnitech_host: "192.168.xxx.xxx"
-larnitech_port: 2041
-larnitech_api_key: "YOUR_API_KEY"
-mqtt_host: "core-mosquitto"
-mqtt_port: 1883
-mqtt_username: "YOUR_MQTT_USER"
-mqtt_password: "YOUR_MQTT_PASSWORD"
-mqtt_discovery_prefix: "homeassistant"
-bridge_id: "larnitech"
-log_level: "info"
-device_grouping: "bridge"
-ignored_areas: []
-ignored_types: []
-hide_setup_area: true
-hide_input_switches: true
-publish_light_schemes: false
-publish_scripts: false
-cleanup_legacy_mqtt: true
-prefix_entity_names_with_area: true
-publish_module_diagnostics: true
-```
-
-## Security notes
-
-- Do not expose the Larnitech API2 port directly to the public internet.
-- Do not commit or share `logic.xml` if it contains API keys, camera URLs, credentials, or private IP addresses.
-- Keep your Larnitech API key and MQTT credentials private.
-- Use VPN or properly secured Home Assistant remote access when remote access is required.
-
-## Development
-
-```bash
-pip install -e '.[dev]'
-pytest
-ruff check .
-```
+Do not include `http://`, `ws://`, or `/api` in the host field.
