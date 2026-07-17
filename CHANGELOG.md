@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.26 - 2026-07-17
+
+### Changed
+
+- Renamed the HACS integration display name to `Larnitech HA Bridge`.
+- Updated config flow title and config entry title to use `Larnitech HA Bridge`.
+- Added field descriptions for host, API2 port and API2 key.
+- Preserved entered config flow values when validation fails.
+- Updated README for the new integration name and local brand icon paths.
+
 ## 0.1.25 - 2026-07-17
 
 ### Changed
