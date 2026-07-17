@@ -2,31 +2,58 @@
 
 Unofficial Home Assistant integration and add-on bridge for Larnitech-compatible smart home systems.
 
-The project provides two installation paths:
-
-1. **HACS custom integration** — recommended public/community path.
-2. **Home Assistant add-on** — legacy/MQTT bridge path for users who prefer MQTT Discovery.
+Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket controller and exposes Larnitech items as native Home Assistant entities. The goal is to keep the public integration simple, local-first and usable for real installations without requiring cloud access or a license key.
 
 > This project is not affiliated with, endorsed by, or sponsored by Larnitech or Home Assistant.  
 > Larnitech and Home Assistant are trademarks of their respective owners.
 
+## Installation paths
+
+1. **HACS custom integration** — recommended public/community path.
+2. **Home Assistant add-on** — legacy/MQTT Discovery bridge path for users who prefer MQTT.
+
 ## Current status
 
-Current HACS integration version: **0.1.27**  
+Current HACS integration version: **0.1.28**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
 
-Current public scope:
+## Features
 
 - Local Larnitech API2 WebSocket connection.
-- Native Home Assistant entities.
-- Lights and dimmers.
+- Native Home Assistant config flow.
+- Lights and dimmers as Home Assistant `light` entities.
 - Common sensors and binary sensors.
 - Valves and switches.
 - Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
+- Room/area-based device grouping using the Larnitech structure when area information is available.
+- Setup/unassigned items are still exposed under a dedicated `Setup` area device.
+- Larnitech light schemes are exposed as buttons under a dedicated light groups device.
 
-Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md). Add-on-specific release notes are in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
+## Entity mapping
+
+| Larnitech item type | Home Assistant entity |
+|---|---|
+| `lamp`, `light` | `light` |
+| `dimmer-lamp` | `light` with brightness |
+| `temperature-sensor` | `sensor` |
+| `humidity-sensor` | `sensor` |
+| `illumination-sensor` | `sensor` |
+| `motion-sensor` | `binary_sensor` |
+| `door-sensor` | `binary_sensor` |
+| `leak-sensor` | `binary_sensor` |
+| `valve`, `valve-heating`, `switch` | `switch` |
+| `fancoil` | `fan` with ON/OFF only |
+| `light-scheme` | `button` |
+
+## Device organisation
+
+The HACS integration groups entities by the room or area reported by Larnitech. This keeps the Home Assistant device page usable in larger installations:
+
+- each Larnitech room/area becomes a Home Assistant device;
+- items without room metadata are grouped under `Larnitech · Setup`;
+- Larnitech light schemes / grouped lights are grouped under `Larnitech · Light groups`.
 
 ## HACS custom integration installation
 
@@ -68,3 +95,8 @@ API2 key: your Larnitech API2 key
 ```
 
 Do not include `http://`, `ws://`, or `/api` in the host field.
+
+## Notes
+
+- Fan-coil speed and heat/cool mode writes are not exposed in the public baseline. Many Larnitech installations use an external heat pump or controller for water temperature and use the fan-coil object only as an air-side ON/OFF control.
+- Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md). Add-on-specific release notes are in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
