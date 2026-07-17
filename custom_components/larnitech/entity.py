@@ -6,7 +6,7 @@ from typing import Any
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN, TYPE_LIGHT_SCHEME
+from .const import DOMAIN, TYPE_DIMMER, TYPE_LAMP, TYPE_LIGHT, TYPE_LIGHT_SCHEME
 from .hub import LarnitechHub
 from .models import DeviceStatus, LarnitechDevice
 
@@ -23,6 +23,17 @@ def larnitech_area(device: LarnitechDevice) -> str:
     return area or "Setup"
 
 
+def is_grouped_light(device: LarnitechDevice) -> bool:
+    if device.type == TYPE_LIGHT_SCHEME:
+        return True
+    if device.type not in {TYPE_LAMP, TYPE_LIGHT, TYPE_DIMMER}:
+        return False
+    contains = device.raw.get("contains")
+    if isinstance(contains, list) and contains:
+        return True
+    return str(device.raw.get("virtual", "")).strip().lower() in {"yes", "true", "1"}
+
+
 def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
     """Return the Home Assistant device grouping for a Larnitech item.
 
@@ -31,7 +42,7 @@ def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
     grouped together and Setup/unassigned items are still visible instead of being
     hidden inside a single large bridge device.
     """
-    if device.type == TYPE_LIGHT_SCHEME:
+    if is_grouped_light(device):
         return DeviceInfo(
             identifiers={(DOMAIN, "light_groups")},
             name="Larnitech · Light groups",
@@ -62,12 +73,12 @@ class LarnitechEntity(Entity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {
+        return {
             "addr": self.device.addr,
             "larnitech_type": self.device.type,
             "larnitech_area": larnitech_area(self.device),
+            "larnitech_grouped_light": is_grouped_light(self.device),
         }
-        return attrs
 
     async def async_added_to_hass(self) -> None:
         self._unsubscribe = self.hub.async_add_listener(self.device.addr, self._handle_status)
