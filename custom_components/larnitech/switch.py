@@ -10,7 +10,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, TYPE_SWITCH, TYPE_VALVE, TYPE_VALVE_HEATING
 from .entity import LarnitechEntity, state_is_on
 from .hub import LarnitechHub
-from .models import LarnitechDevice
 
 SWITCH_TYPES = {TYPE_SWITCH, TYPE_VALVE, TYPE_VALVE_HEATING}
 
