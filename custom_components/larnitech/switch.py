@@ -8,10 +8,28 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, TYPE_SWITCH, TYPE_VALVE, TYPE_VALVE_HEATING
-from .entity import LarnitechEntity, state_is_on
+from .entity import LarnitechEntity, state_is_on, status_dict
 from .hub import LarnitechHub
+from .models import LarnitechDevice
 
 SWITCH_TYPES = {TYPE_SWITCH, TYPE_VALVE, TYPE_VALVE_HEATING}
+
+
+def is_controllable_switch(device: LarnitechDevice) -> bool:
+    if device.type in {TYPE_VALVE, TYPE_VALVE_HEATING}:
+        return True
+    if device.type != TYPE_SWITCH:
+        return False
+
+    # Larnitech wall inputs are often reported as type=switch, area=Setup,
+    # state=undefined and contain `linked` targets. They are physical inputs, not
+    # useful Home Assistant switch controls, so keep them out of the entity list.
+    if isinstance(device.raw.get("linked"), list) and device.raw["linked"]:
+        state = str(status_dict(device.raw.get("status")).get("state", "")).lower()
+        if state in {"undefined", "none", ""}:
+            return False
+
+    return True
 
 
 async def async_setup_entry(
@@ -21,7 +39,7 @@ async def async_setup_entry(
 ) -> None:
     hub: LarnitechHub = hass.data[DOMAIN][entry.entry_id]
     devices = [device for device in hub.devices if device.type in SWITCH_TYPES]
-    async_add_entities([LarnitechSwitch(hub, device) for device in devices])
+    async_add_entities([LarnitechSwitch(hub, device) for device in devices if is_controllable_switch(device)])
 
 
 class LarnitechSwitch(LarnitechEntity, SwitchEntity):
