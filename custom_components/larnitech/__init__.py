@@ -4,10 +4,12 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS, TYPE_SWITCH
 from .hub import LarnitechHub
+from .models import LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await hub.async_setup()
+    _cleanup_stale_generic_switch_entities(hass, hub.devices)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -49,3 +52,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _cleanup_stale_generic_switch_entities(
+    hass: HomeAssistant,
+    devices: list[LarnitechDevice],
+) -> None:
+    """Remove old entity-registry entries for hidden generic Larnitech switches."""
+    registry = er.async_get(hass)
+    for device in devices:
+        if device.type != TYPE_SWITCH:
+            continue
+        unique_id = f"{DOMAIN}_{device.addr.replace(':', '_')}"
+        entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
+        if entity_id is None:
+            continue
+        registry.async_remove(entity_id)
+        _LOGGER.debug("Removed stale Larnitech generic switch entity %s", entity_id)
