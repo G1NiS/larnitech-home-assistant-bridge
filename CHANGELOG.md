@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.25 - 2026-07-17
+
+### Changed
+
+- Improved the HACS integration config flow host handling.
+- Host input now accepts and normalizes values such as `http://host`, `ws://host`, and `host:2041`.
+- Added field-level errors for missing host and missing API2 key.
+- Updated config flow labels and README to explain that the host field should contain only a host name or IP address.
+- Added local Home Assistant brand images under `custom_components/larnitech/brand/`.
+
 ## 0.1.24 - 2026-07-09
 
 ### Added
@@ -15,14 +25,12 @@
 - Added HACS metadata with `hacs.json` and `info.md`.
 - Added HACS and Hassfest validation workflows.
 - Added translation files for the config flow.
-- Added funding metadata for service-based monetization.
-- Added custom SVG brand icon draft under `brand/icon.svg`.
+- Added custom brand icon assets.
 
 ### Notes
 
 - Public HACS baseline is free and does not require a license key.
 - Fancoils are exposed as ON/OFF fan entities only.
-- Add binary `brand/icon.png` before submitting as a HACS default repository.
 
 ## 0.1.23 - 2026-07-09
 
