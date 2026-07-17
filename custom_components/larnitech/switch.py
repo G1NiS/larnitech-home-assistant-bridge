@@ -39,7 +39,13 @@ async def async_setup_entry(
 ) -> None:
     hub: LarnitechHub = hass.data[DOMAIN][entry.entry_id]
     devices = [device for device in hub.devices if device.type in SWITCH_TYPES]
-    async_add_entities([LarnitechSwitch(hub, device) for device in devices if is_controllable_switch(device)])
+    async_add_entities(
+        [
+            LarnitechSwitch(hub, device)
+            for device in devices
+            if is_controllable_switch(device)
+        ]
+    )
 
 
 class LarnitechSwitch(LarnitechEntity, SwitchEntity):
