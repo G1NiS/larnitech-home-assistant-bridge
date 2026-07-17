@@ -7,22 +7,42 @@
         "data": {
           "host": "Host or IP address",
           "port": "API2 port",
-          "api_key": "API2 key"
+          "api_key": "API2 key",
+          "area_overrides_text": "Area overrides"
         },
         "data_description": {
           "host": "Example: 192.168.xxx.xxx or larnitech.local. Do not include http:// or /api.",
           "port": "Default API2 port is 2041.",
-          "api_key": "API2 key from the Larnitech controller settings."
+          "api_key": "API2 key from the Larnitech controller settings.",
+          "area_overrides_text": "Optional. Use one line per item in the format addr=room. Example: 415:50=Svetainė"
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot connect or authorize with the Larnitech controller. Check host, port and API2 key.",
       "host_required": "Host is required.",
-      "api_key_required": "API2 key is required."
+      "api_key_required": "API2 key is required.",
+      "area_overrides_invalid": "Area overrides must use one line per item in the format addr=room. Example: 415:50=Svetainė"
     },
     "abort": {
       "already_configured": "This Larnitech controller is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Larnitech HA Bridge options",
+        "description": "Optional area overrides for Larnitech items that are reported under Setup but should appear in specific Home Assistant rooms.",
+        "data": {
+          "area_overrides_text": "Area overrides"
+        },
+        "data_description": {
+          "area_overrides_text": "Use one line per item in the format addr=room. Example: 415:50=Svetainė"
+        }
+      }
+    },
+    "error": {
+      "area_overrides_invalid": "Area overrides must use one line per item in the format addr=room. Example: 415:50=Svetainė"
     }
   }
 }
