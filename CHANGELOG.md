@@ -13,6 +13,9 @@
 ### Changed
 
 - Generic Larnitech `light` items are now mapped as Home Assistant `light` entities.
+- Virtual grouped lights with `contains` metadata are grouped under `Larnitech · Light groups`.
+- Physical wall/input switches with only `linked` targets and `undefined` state are filtered out of switch entities.
+- Existing config entry titles are normalized to `Larnitech HA Bridge (...)` during setup.
 
 ## 0.1.27 - 2026-07-17
 
