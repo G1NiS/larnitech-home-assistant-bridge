@@ -12,7 +12,7 @@ The project provides two installation paths:
 
 ## Current status
 
-Current HACS integration version: **0.1.25**  
+Current HACS integration version: **0.1.26**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -54,20 +54,18 @@ Integration
 7. Go to:
 
 ```text
-Settings → Devices & services → Add integration → Larnitech
+Settings → Devices & services → Add integration → Larnitech HA Bridge
 ```
 
-8. Enter the Larnitech host, API2 port and API2 key.
-
-Use only the host name or IP address in the host field. Do not include `http://` or `/api`.
+8. Enter the Larnitech connection details:
 
 ```text
 Host: 192.168.xxx.xxx
-Port: 2041
+API2 port: 2041
 API2 key: your Larnitech API2 key
 ```
 
-The config flow also accepts `http://host`, `ws://host` and `host:port` and normalizes them internally, but the recommended input is host/IP only.
+Use the host or IP address only. Do not include `http://`, `ws://`, or `/api`.
 
 ## HACS publishing checklist
 
@@ -87,12 +85,12 @@ Included metadata and validation:
 - `custom_components/larnitech/manifest.json`
 - `custom_components/larnitech/strings.json`
 - `custom_components/larnitech/translations/en.json`
+- `custom_components/larnitech/brand/icon.png`
+- `custom_components/larnitech/brand/logo.png`
 - `.github/workflows/validate-hacs.yml`
 - `.github/workflows/hassfest.yml`
 - `info.md`
 - `brand/icon.png`
-- `custom_components/larnitech/brand/icon.png`
-- `custom_components/larnitech/brand/logo.png`
 
 ## Supported items
 
