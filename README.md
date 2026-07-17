@@ -12,7 +12,7 @@ The project provides two installation paths:
 
 ## Current status
 
-Current HACS integration version: **0.1.24**  
+Current HACS integration version: **0.1.25**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -59,6 +59,16 @@ Settings → Devices & services → Add integration → Larnitech
 
 8. Enter the Larnitech host, API2 port and API2 key.
 
+Use only the host name or IP address in the host field. Do not include `http://` or `/api`.
+
+```text
+Host: 192.168.xxx.xxx
+Port: 2041
+API2 key: your Larnitech API2 key
+```
+
+The config flow also accepts `http://host`, `ws://host` and `host:port` and normalizes them internally, but the recommended input is host/IP only.
+
 ## HACS publishing checklist
 
 Repository structure:
@@ -80,9 +90,9 @@ Included metadata and validation:
 - `.github/workflows/validate-hacs.yml`
 - `.github/workflows/hassfest.yml`
 - `info.md`
-- custom SVG brand icon draft in `brand/icon.svg`
-
-Before submitting as a HACS default repository, add a binary `brand/icon.png`. The current repository contains an SVG draft because binary PNG upload is not available through this automation channel.
+- `brand/icon.png`
+- `custom_components/larnitech/brand/icon.png`
+- `custom_components/larnitech/brand/logo.png`
 
 ## Supported items
 
