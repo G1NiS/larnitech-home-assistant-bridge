@@ -14,7 +14,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 
 ## Current status
 
-Current HACS integration version: **0.1.29**  
+Current HACS integration version: **0.1.30**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -28,8 +28,8 @@ The public HACS integration is free and does not require a license key.
 - Valves and switches.
 - Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
 - Room/area-based device grouping using the Larnitech structure when area information is available.
-- Setup/unassigned items are still exposed under a dedicated `Setup` area device.
-- Larnitech light schemes are exposed as buttons under a dedicated light groups device.
+- Setup/unassigned items are exposed under a dedicated `Setup` area device.
+- Larnitech light schemes are exposed as buttons under a dedicated `Light groups` device.
 
 ## Entity mapping
 
@@ -51,9 +51,9 @@ The public HACS integration is free and does not require a license key.
 
 The HACS integration groups entities by the room or area reported by Larnitech. This keeps the Home Assistant device page usable in larger installations:
 
-- each Larnitech room/area becomes a Home Assistant device;
-- items without room metadata are grouped under `Larnitech · Setup`;
-- Larnitech light schemes / grouped lights are grouped under `Larnitech · Light groups`.
+- each Larnitech room/area becomes a Home Assistant device named directly after the room, for example `Svetainė`, `Darbo kambarys`, `Beno kambarys`;
+- items without room metadata are grouped under `Setup`;
+- Larnitech light schemes / grouped lights are grouped under `Light groups`.
 
 ## HACS custom integration installation
 
