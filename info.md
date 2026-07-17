@@ -13,6 +13,6 @@ The HACS version is the free community baseline:
 - valves and switches;
 - fancoils as simple ON/OFF fan entities.
 
-## Commercial support
+## Notes
 
-Paid installer support, diagnostics, mapping work, dashboard work and custom HVAC logic can be offered separately. The public HACS integration does not require a license key.
+This integration runs locally and does not require a license key.
