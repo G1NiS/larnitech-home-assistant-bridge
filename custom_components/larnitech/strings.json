@@ -2,12 +2,17 @@
   "config": {
     "step": {
       "user": {
-        "title": "Larnitech",
+        "title": "Larnitech HA Bridge",
         "description": "Connect Home Assistant to a Larnitech-compatible controller through local API2 WebSocket. Enter only the host name or IP address; http:// is not required.",
         "data": {
           "host": "Host or IP address",
           "port": "API2 port",
           "api_key": "API2 key"
+        },
+        "data_description": {
+          "host": "Example: 192.168.xxx.xxx or larnitech.local. Do not include http:// or /api.",
+          "port": "Default API2 port is 2041.",
+          "api_key": "API2 key from the Larnitech controller settings."
         }
       }
     },
