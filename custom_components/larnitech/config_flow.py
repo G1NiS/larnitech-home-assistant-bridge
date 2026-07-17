@@ -10,6 +10,9 @@ from .api import LarnitechApiClient
 from .const import DEFAULT_PORT, DOMAIN
 
 
+INTEGRATION_TITLE = "Larnitech HA Bridge"
+
+
 def _normalize_host_and_port(host: str, port: int) -> tuple[str, int]:
     """Normalize user-entered host values for local API2 connection.
 
@@ -40,6 +43,9 @@ class LarnitechConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
+        host_default = ""
+        port_default = DEFAULT_PORT
+        api_key_default = ""
 
         if user_input is not None:
             raw_host = user_input.get("host", "")
@@ -48,6 +54,9 @@ class LarnitechConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             host, port = _normalize_host_and_port(str(raw_host), int(raw_port))
             api_key = str(raw_api_key).strip()
+            host_default = host
+            port_default = port
+            api_key_default = api_key
 
             if not host:
                 errors["host"] = "host_required"
@@ -69,17 +78,15 @@ class LarnitechConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 return self.async_create_entry(
-                    title=f"Larnitech {host}",
+                    title=f"{INTEGRATION_TITLE} ({host})",
                     data={"host": host, "port": port, "api_key": api_key},
                 )
 
-            user_input = {**user_input, "host": host, "port": port, "api_key": api_key}
-
         schema = vol.Schema(
             {
-                vol.Required("host"): str,
-                vol.Required("port", default=DEFAULT_PORT): int,
-                vol.Required("api_key"): str,
+                vol.Required("host", default=host_default): str,
+                vol.Required("port", default=port_default): int,
+                vol.Required("api_key", default=api_key_default): str,
             }
         )
         return self.async_show_form(
