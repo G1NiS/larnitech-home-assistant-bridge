@@ -12,11 +12,13 @@ The integration connects to a local Larnitech API2 WebSocket controller and expo
 - Native Home Assistant config flow.
 - Lights and dimmers.
 - Common sensors and binary sensors.
-- Valves and switches.
+- Valves as switch entities.
 - Fan-coils as simple ON/OFF fan entities.
 - Room/area-based device grouping when Larnitech area metadata is available.
+- Optional area overrides for Setup items that should appear in real rooms.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Dedicated `Light groups` section for Larnitech light schemes and virtual grouped lights.
+- Generic Larnitech wall-button / low-level `switch` inputs are hidden by default.
 
 ## Notes
 
