@@ -61,10 +61,10 @@ The HACS integration groups entities by the room or area reported by Larnitech. 
 If Larnitech stores a real item in `Setup` and only exposes room references in the UI, use area overrides in the integration options:
 
 ```text
-415:50=Svetainė
-415:52=Miegamasis
-415:53=Beno kambarys
-415:51=Martyno kambarys
+415:50=Room1
+415:52=Room2
+415:53=Room3
+415:51=Room4
 ```
 
 ## HACS custom integration installation
