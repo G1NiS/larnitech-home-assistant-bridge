@@ -10,9 +10,11 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
+    Platform.BUTTON,
 ]
 
 TYPE_LAMP = "lamp"
+TYPE_LIGHT = "light"
 TYPE_DIMMER = "dimmer-lamp"
 TYPE_FANCOIL = "fancoil"
 TYPE_TEMPERATURE = "temperature-sensor"
@@ -24,3 +26,4 @@ TYPE_LEAK = "leak-sensor"
 TYPE_SWITCH = "switch"
 TYPE_VALVE = "valve"
 TYPE_VALVE_HEATING = "valve-heating"
+TYPE_LIGHT_SCHEME = "light-scheme"
