@@ -14,7 +14,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 
 ## Current status
 
-Current HACS integration version: **0.1.30**  
+Current HACS integration version: **0.1.31**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -25,11 +25,13 @@ The public HACS integration is free and does not require a license key.
 - Native Home Assistant config flow.
 - Lights and dimmers as Home Assistant `light` entities.
 - Common sensors and binary sensors.
-- Valves and switches.
+- Valves as Home Assistant `switch` entities.
 - Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
 - Room/area-based device grouping using the Larnitech structure when area information is available.
+- Optional area overrides for items that Larnitech reports under `Setup` but should appear in a real room.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Larnitech light schemes are exposed as buttons under a dedicated `Light groups` device.
+- Generic Larnitech `switch` inputs are hidden by default to avoid exposing wall buttons / inactive low-level inputs as HA controls.
 
 ## Entity mapping
 
@@ -43,7 +45,8 @@ The public HACS integration is free and does not require a license key.
 | `motion-sensor` | `binary_sensor` |
 | `door-sensor` | `binary_sensor` |
 | `leak-sensor` | `binary_sensor` |
-| `valve`, `valve-heating`, `switch` | `switch` |
+| `valve`, `valve-heating` | `switch` |
+| `switch` | hidden by default |
 | `fancoil` | `fan` with ON/OFF only |
 | `light-scheme` | `button` |
 
@@ -54,6 +57,15 @@ The HACS integration groups entities by the room or area reported by Larnitech. 
 - each Larnitech room/area becomes a Home Assistant device named directly after the room, for example `Svetainė`, `Darbo kambarys`, `Beno kambarys`;
 - items without room metadata are grouped under `Setup`;
 - Larnitech light schemes / grouped lights are grouped under `Light groups`.
+
+If Larnitech stores a real item in `Setup` and only exposes room references in the UI, use area overrides in the integration options:
+
+```text
+415:50=Svetainė
+415:52=Miegamasis
+415:53=Beno kambarys
+415:51=Martyno kambarys
+```
 
 ## HACS custom integration installation
 
