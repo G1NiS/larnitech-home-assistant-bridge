@@ -14,7 +14,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 
 ## Current status
 
-Current HACS integration version: **0.1.28**  
+Current HACS integration version: **0.1.29**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -95,8 +95,3 @@ API2 key: your Larnitech API2 key
 ```
 
 Do not include `http://`, `ws://`, or `/api` in the host field.
-
-## Notes
-
-- Fan-coil speed and heat/cool mode writes are not exposed in the public baseline. Many Larnitech installations use an external heat pump or controller for water temperature and use the fan-coil object only as an air-side ON/OFF control.
-- Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md). Add-on-specific release notes are in [`addon/CHANGELOG.md`](addon/CHANGELOG.md).
