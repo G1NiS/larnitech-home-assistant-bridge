@@ -4,6 +4,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
@@ -33,7 +34,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         area_overrides=area_overrides,
     )
 
-    await hub.async_setup()
+    try:
+        await hub.async_setup()
+    except Exception as exc:
+        await hub.async_close()
+        raise ConfigEntryNotReady(f"Unable to connect to Larnitech API2 at {host}") from exc
+
     _cleanup_stale_generic_switch_entities(hass, hub.devices)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
