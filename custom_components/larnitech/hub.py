@@ -58,12 +58,15 @@ class LarnitechHub:
         self.status_by_addr: dict[str, Any] = {}
         self._listeners: dict[str, set[Listener]] = {}
         self._status_api = LarnitechApiClient(host, port, api_key, name="status")
-        self._command_api = LarnitechApiClient(host, port, api_key, name="command")
+        self._command_lock = asyncio.Lock()
         self._status_task: asyncio.Task | None = None
         self._closed = False
 
     async def async_setup(self) -> None:
-        await self._command_api.connect()
+        # Keep only one persistent WebSocket open. Some Larnitech controllers close
+        # a second simultaneous API2 WebSocket during the HTTP upgrade handshake,
+        # which Home Assistant reports as "did not receive a valid HTTP response".
+        # Commands use short-lived connections in async_set_status instead.
         await self._status_api.connect()
         devices = await self._status_api.get_devices()
         devices = self._with_area_overrides(devices)
@@ -85,10 +88,18 @@ class LarnitechHub:
             except asyncio.CancelledError:
                 pass
         await self._status_api.close()
-        await self._command_api.close()
 
     async def async_set_status(self, addr: str, status: Any) -> None:
-        await self._command_api.set_status(addr, status)
+        # Use a transient command connection instead of keeping a second WebSocket
+        # open for the whole integration lifetime. This avoids controller-side
+        # connection limits and stale command sockets after HA reloads.
+        async with self._command_lock:
+            command_api = LarnitechApiClient(self.host, self.port, self.api_key, name="command")
+            try:
+                await command_api.connect()
+                await command_api.set_status(addr, status)
+            finally:
+                await command_api.close()
 
     @callback
     def async_add_listener(self, addr: str, listener: Listener) -> Callable[[], None]:
