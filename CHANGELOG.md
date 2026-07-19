@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.32 - 2026-07-18
+
+### Changed
+
+- Reduced persistent API2 usage to one status WebSocket connection.
+- Commands now use short-lived API2 WebSocket connections to avoid controller-side connection limits and failed second-handshake errors.
+
+### Fixed
+
+- Setup API2 connection failures now raise `ConfigEntryNotReady`, allowing Home Assistant to retry instead of leaving the integration in a hard failed state.
+
 ## 0.1.31 - 2026-07-17
 
 ### Added
