@@ -21,7 +21,6 @@ from .const import (
 from .hub import LarnitechHub
 from .models import DeviceStatus, LarnitechDevice
 
-
 GENERIC_ENTITY_NAMES = {
     "button",
     "contact",
@@ -44,13 +43,11 @@ LOW_LEVEL_NAME_PREFIXES = (
 )
 
 
-
 def _slugify(value: str) -> str:
     value = value.lower().strip()
     value = re.sub(r"[^a-z0-9_]+", "_", value)
     value = re.sub(r"_+", "_", value).strip("_")
     return value or "unknown"
-
 
 
 def _strip_low_level_prefixes(value: str) -> str:
@@ -66,11 +63,9 @@ def _strip_low_level_prefixes(value: str) -> str:
     return cleaned
 
 
-
 def _is_generic_name(value: str) -> bool:
     normalized = _strip_low_level_prefixes(value).strip().lower()
     return normalized in GENERIC_ENTITY_NAMES
-
 
 
 def larnitech_area(device: LarnitechDevice) -> str:
@@ -78,10 +73,8 @@ def larnitech_area(device: LarnitechDevice) -> str:
     return area or "Setup"
 
 
-
 def is_setup_area(device: LarnitechDevice) -> bool:
     return larnitech_area(device).lower() == "setup"
-
 
 
 def is_grouped_light(device: LarnitechDevice) -> bool:
@@ -93,7 +86,6 @@ def is_grouped_light(device: LarnitechDevice) -> bool:
     if isinstance(contains, list) and contains:
         return True
     return str(device.raw.get("virtual", "")).strip().lower() in {"yes", "true", "1"}
-
 
 
 def larnitech_entity_name(device: LarnitechDevice) -> str:
@@ -125,7 +117,6 @@ def larnitech_entity_name(device: LarnitechDevice) -> str:
     return name or raw_name or device.type or device.addr
 
 
-
 def entity_enabled_default(device: LarnitechDevice) -> bool:
     """Hide noisy low-level Setup entities by default.
 
@@ -139,11 +130,11 @@ def entity_enabled_default(device: LarnitechDevice) -> bool:
     if device.type == TYPE_DOOR and _is_generic_name(device.name or ""):
         return False
 
-    if is_setup_area(device) and device.type in {TYPE_DIMMER, TYPE_LAMP, TYPE_LIGHT, TYPE_DOOR}:
+    setup_light_types = {TYPE_DIMMER, TYPE_LAMP, TYPE_LIGHT, TYPE_DOOR}
+    if is_setup_area(device) and device.type in setup_light_types:
         return not _is_generic_name(device.name or "")
 
     return True
-
 
 
 def larnitech_device_info(device: LarnitechDevice) -> DeviceInfo:
@@ -209,19 +200,16 @@ class LarnitechEntity(Entity):
         return self.hub.status_by_addr.get(self.device.addr, self.device.raw.get("status"))
 
 
-
 def status_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {"state": value}
 
 
-
 def state_is_on(value: Any) -> bool:
     data = status_dict(value)
     state = str(data.get("state", data.get("value", value))).strip().lower()
     return state in {"on", "open", "opened", "true", "1", "yes"}
-
 
 
 def numeric_value(value: Any, *keys: str) -> float | None:
