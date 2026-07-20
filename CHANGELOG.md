@@ -6,10 +6,14 @@
 
 - Reduced persistent API2 usage to one status WebSocket connection.
 - Commands now use short-lived API2 WebSocket connections to avoid controller-side connection limits and failed second-handshake errors.
+- Normalized user-facing entity names by removing low-level prefixes such as `Setup` and `Larnitech Smart House`.
+- Fancoil entities now use a clean function name, `Fankoilas`, while the room/device context provides the room name.
+- Generic low-level Setup lights, doors and generic switch/input items are hidden by default to reduce dashboard noise.
 
 ### Fixed
 
 - Setup API2 connection failures now raise `ConfigEntryNotReady`, allowing Home Assistant to retry instead of leaving the integration in a hard failed state.
+- Added cleanup for stale entity-registry entries that were created by earlier versions for hidden low-level Larnitech items.
 
 ## 0.1.31 - 2026-07-17
 
