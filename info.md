@@ -15,10 +15,11 @@ The integration connects to a local Larnitech API2 WebSocket controller and expo
 - Valves as switch entities.
 - Fan-coils as simple ON/OFF fan entities.
 - Room/area-based device grouping when Larnitech area metadata is available.
+- Clean entity naming: low-level prefixes such as `Setup` are removed from user-facing names.
 - Optional area overrides for Setup items that should appear in real rooms.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Dedicated `Light groups` section for Larnitech light schemes and virtual grouped lights.
-- Generic Larnitech wall-button / low-level `switch` inputs are hidden by default.
+- Generic low-level items without meaningful names are hidden by default.
 
 ## Notes
 
