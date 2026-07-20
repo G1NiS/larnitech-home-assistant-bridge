@@ -29,10 +29,11 @@ The public HACS integration is free and does not require a license key.
 - Valves as Home Assistant `switch` entities.
 - Larnitech `fancoil` items as simple Home Assistant `fan` entities with **ON/OFF only**.
 - Room/area-based device grouping using the Larnitech structure when area information is available.
+- Clean entity naming: low-level prefixes such as `Setup` are removed from user-facing entity names.
 - Optional area overrides for items that Larnitech reports under `Setup` but should appear in a real room.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Larnitech light schemes are exposed as buttons under a dedicated `Light groups` device.
-- Generic Larnitech `switch` inputs are hidden by default to avoid exposing wall buttons / inactive low-level inputs as HA controls.
+- Generic low-level items are hidden by default when they do not have meaningful names, reducing dashboard noise.
 
 ## Entity mapping
 
@@ -44,7 +45,7 @@ The public HACS integration is free and does not require a license key.
 | `humidity-sensor` | `sensor` |
 | `illumination-sensor` | `sensor` |
 | `motion-sensor` | `binary_sensor` |
-| `door-sensor` | `binary_sensor` |
+| `door-sensor` | `binary_sensor`; generic low-level `Door` items are hidden by default |
 | `leak-sensor` | `binary_sensor` |
 | `valve`, `valve-heating` | `switch` |
 | `switch` | hidden by default |
@@ -58,6 +59,8 @@ The HACS integration groups entities by the room or area reported by Larnitech. 
 - each Larnitech room/area becomes a Home Assistant device named directly after the room, for example `Svetainė`, `Darbo kambarys`, `Beno kambarys`;
 - items without room metadata are grouped under `Setup`;
 - Larnitech light schemes / grouped lights are grouped under `Light groups`.
+
+Entity names are intentionally short because Home Assistant already provides the room/device context. For example, a Larnitech `Setup Beno` fancoil is exposed as `Fankoilas` inside the `Beno kambarys` device/area.
 
 If Larnitech stores a real item in `Setup` and only exposes room references in the UI, use area overrides in the integration options:
 
