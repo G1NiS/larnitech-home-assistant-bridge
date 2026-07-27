@@ -14,7 +14,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 
 ## Current status
 
-Current HACS integration version: **0.1.32**  
+Current HACS integration version: **0.1.33**  
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -34,6 +34,7 @@ The public HACS integration is free and does not require a license key.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Larnitech light schemes are exposed as buttons under a dedicated `Light groups` device.
 - Generic low-level items are hidden by default when they do not have meaningful names, reducing dashboard noise.
+- HACS switch-mapping actions that correlate physical key presses with changed lights and groups.
 
 ## Entity mapping
 
@@ -70,6 +71,22 @@ If Larnitech stores a real item in `Setup` and only exposes room references in t
 415:53=Room3
 415:51=Room4
 ```
+
+## HACS switch mapping
+
+Version `0.1.33` adds temporary mapping actions to the native HACS integration. They record which API2 input changed and which lamps, dimmers, groups, scripts, relays or valves changed after it.
+
+1. Open **Developer tools → Actions**.
+2. Run `larnitech.start_mapping` with the default 3-second grouping window.
+3. Press one physical wall-switch key at a time. Wait at least 3 seconds before the next key.
+4. Run `larnitech.stop_mapping` when the walk-through is complete.
+5. Open the Home Assistant configuration directory and retrieve:
+
+```text
+/config/larnitech_mapping/mapping_summary_latest.json
+```
+
+The folder also contains the raw JSONL status stream and a device snapshot for the session. Sensor changes are retained in the raw stream but excluded from the summarized switch steps.
 
 ## HACS custom integration installation
 
