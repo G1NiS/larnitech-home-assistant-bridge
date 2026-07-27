@@ -86,7 +86,7 @@ Version `0.1.33` adds temporary mapping actions to the native HACS integration. 
 /config/larnitech_mapping/mapping_summary_latest.json
 ```
 
-The folder also contains the raw JSONL status stream and a device snapshot for the session. Sensor changes are retained in the raw stream but excluded from the summarized switch steps.
+The folder also contains a filtered JSONL event stream and a redacted device snapshot for the session. Sensor changes are excluded from the mapping export, known initial states are used as the baseline, and sessions stop automatically after 60 minutes.
 
 ## HACS custom integration installation
 
@@ -127,4 +127,4 @@ API2 port: 2041
 API2 key: your Larnitech API2 key
 ```
 
-Do not include `http://`, `ws://`, or `/api` in the host field.
+Do not include `http://`, `ws://` or `/api` in the host field.
