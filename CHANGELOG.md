@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.33 - 2026-07-27
+
+### Added
+
+- Added native HACS actions `larnitech.start_mapping` and `larnitech.stop_mapping` for physical wall-switch mapping.
+- Mapping sessions correlate API2 switch/input changes with lamps, dimmers, light groups, scripts, relays and valves that change immediately afterwards.
+- Added output-only grouping when the controller reports changed lights but does not expose the physical input event.
+- Mapping files are stored under `/config/larnitech_mapping/`, including `mapping_summary_latest.json`, the raw JSONL event stream and the session device snapshot.
+- Sensor changes remain available in the raw stream but are excluded from summarized mapping steps.
+
 ## 0.1.32 - 2026-07-18
 
 ### Changed
