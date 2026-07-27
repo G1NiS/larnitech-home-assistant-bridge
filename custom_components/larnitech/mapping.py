@@ -162,7 +162,9 @@ class MappingRecorder:
 
     def _start_sync(self, now: datetime) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        assert self.events_path is not None
         assert self.devices_path is not None
+        self.events_path.touch(exist_ok=True)
         self._write_json(
             self.devices_path,
             {
