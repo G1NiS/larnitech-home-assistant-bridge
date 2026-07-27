@@ -15,7 +15,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 ## Current status
 
 Current HACS integration version: **0.1.32**  
-Current Home Assistant add-on version: **0.1.23**
+Current Home Assistant add-on version: **0.1.24**
 
 The public HACS integration is free and does not require a license key.
 
@@ -34,6 +34,34 @@ The public HACS integration is free and does not require a license key.
 - Setup/unassigned items are exposed under a dedicated `Setup` area device.
 - Larnitech light schemes are exposed as buttons under a dedicated `Light groups` device.
 - Generic low-level items are hidden by default when they do not have meaningful names, reducing dashboard noise.
+- Optional add-on Mapping mode for correlating wall-button presses with changed lights and outputs.
+
+## Mapping physical wall buttons
+
+The Home Assistant add-on can temporarily record Larnitech API2 status changes while physical wall buttons are tested.
+
+1. Open the add-on configuration.
+2. Set `mapping_mode` to `true`.
+3. Keep `mapping_group_window_seconds` at `3` unless output changes arrive unusually slowly.
+4. Restart the add-on.
+5. Press one physical wall-button key, then wait at least three seconds before pressing the next key.
+6. After the walk-through, set `mapping_mode` back to `false` and restart the add-on.
+
+Mapping files are written to:
+
+```text
+/share/larnitech_mapping/
+```
+
+The most useful file is:
+
+```text
+mapping_summary_latest.json
+```
+
+Each summary step contains the detected input address when API2 reports it and all lamp, dimmer, group, script, relay or valve outputs that changed immediately afterwards. When API2 does not report the physical input, output changes are still grouped by time and can be identified by the order in which the keys were tested.
+
+The raw event stream and device snapshot are retained in the same directory for troubleshooting.
 
 ## Entity mapping
 
