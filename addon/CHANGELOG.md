@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.24 - 2026-07-27
+
+### Added
+
+- Added temporary Mapping mode for correlating physical wall-button activity with Larnitech output changes.
+- Added raw JSONL event capture, a device snapshot and a continuously updated mapping summary.
+- Added output-only burst grouping for installations where API2 does not report the physical switch input.
+- Mapping files are written to `/share/larnitech_mapping/` so they can be retrieved through Home Assistant shared storage.
+
+### Notes
+
+- Mapping mode is disabled by default and does not change normal MQTT discovery or command behaviour.
+- During mapping, press one key and wait at least `mapping_group_window_seconds` before pressing the next key.
+- Disable Mapping mode and restart the add-on after the mapping walk-through.
+
 ## 0.1.23 - 2026-07-09
 
 ### Changed
