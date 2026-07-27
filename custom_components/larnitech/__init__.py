@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 
 import voluptuous as vol
 
@@ -124,23 +125,23 @@ def _register_mapping_services(hass: HomeAssistant) -> None:
         hass.services.async_register(
             DOMAIN,
             SERVICE_START_MAPPING,
-            _async_handle_start_mapping,
+            partial(_async_handle_start_mapping, hass),
             schema=START_MAPPING_SCHEMA,
         )
     if not hass.services.has_service(DOMAIN, SERVICE_STOP_MAPPING):
         hass.services.async_register(
             DOMAIN,
             SERVICE_STOP_MAPPING,
-            _async_handle_stop_mapping,
+            partial(_async_handle_stop_mapping, hass),
             schema=STOP_MAPPING_SCHEMA,
         )
 
 
-async def _async_handle_start_mapping(call: ServiceCall) -> None:
-    hub = _hub_for_service(call.hass, call)
+async def _async_handle_start_mapping(hass: HomeAssistant, call: ServiceCall) -> None:
+    hub = _hub_for_service(hass, call)
     path = await hub.async_start_mapping(call.data[CONF_GROUP_WINDOW_SECONDS])
     persistent_notification.async_create(
-        call.hass,
+        hass,
         (
             "Mapping started. Press one wall-switch key at a time and wait at least "
             f"{call.data[CONF_GROUP_WINDOW_SECONDS]:g} seconds between keys. "
@@ -151,15 +152,15 @@ async def _async_handle_start_mapping(call: ServiceCall) -> None:
     )
 
 
-async def _async_handle_stop_mapping(call: ServiceCall) -> None:
-    hub = _hub_for_service(call.hass, call)
+async def _async_handle_stop_mapping(hass: HomeAssistant, call: ServiceCall) -> None:
+    hub = _hub_for_service(hass, call)
     path = await hub.async_stop_mapping()
     if path is None:
         message = "No active Larnitech mapping session was found."
     else:
         message = f"Mapping stopped. Upload `{path}` for final switch and light labeling."
     persistent_notification.async_create(
-        call.hass,
+        hass,
         message,
         title="Larnitech mapping stopped",
         notification_id="larnitech_mapping",
