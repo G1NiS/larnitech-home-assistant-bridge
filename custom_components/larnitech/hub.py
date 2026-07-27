@@ -4,11 +4,13 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 
 from .api import LarnitechApiClient
+from .mapping import MappingRecorder
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,7 +62,12 @@ class LarnitechHub:
         self._status_api = LarnitechApiClient(host, port, api_key, name="status")
         self._command_lock = asyncio.Lock()
         self._status_task: asyncio.Task | None = None
+        self._mapping_recorder: MappingRecorder | None = None
         self._closed = False
+
+    @property
+    def mapping_active(self) -> bool:
+        return self._mapping_recorder is not None and self._mapping_recorder.active
 
     async def async_setup(self) -> None:
         # Keep only one persistent WebSocket open. Some Larnitech controllers close
@@ -81,6 +88,7 @@ class LarnitechHub:
 
     async def async_close(self) -> None:
         self._closed = True
+        await self.async_stop_mapping()
         if self._status_task:
             self._status_task.cancel()
             try:
@@ -100,6 +108,36 @@ class LarnitechHub:
                 await command_api.set_status(addr, status)
             finally:
                 await command_api.close()
+
+    async def async_start_mapping(self, group_window_seconds: float = 3.0) -> Path:
+        if self.mapping_active:
+            assert self._mapping_recorder is not None
+            assert self._mapping_recorder.latest_summary_path is not None
+            return self._mapping_recorder.latest_summary_path
+
+        output_dir = Path(self.hass.config.path("larnitech_mapping"))
+        recorder = MappingRecorder(
+            self.hass,
+            output_dir,
+            group_window_seconds=group_window_seconds,
+        )
+        path = await recorder.async_start(self.devices)
+        self._mapping_recorder = recorder
+        _LOGGER.warning(
+            "Larnitech mapping session %s started; summary: %s",
+            recorder.session_id,
+            path,
+        )
+        return path
+
+    async def async_stop_mapping(self) -> Path | None:
+        recorder = self._mapping_recorder
+        if recorder is None:
+            return None
+        path = await recorder.async_stop()
+        _LOGGER.warning("Larnitech mapping session stopped; summary: %s", path)
+        self._mapping_recorder = None
+        return path
 
     @callback
     def async_add_listener(self, addr: str, listener: Listener) -> Callable[[], None]:
@@ -178,5 +216,7 @@ class LarnitechHub:
     @callback
     def _handle_status(self, status: DeviceStatus) -> None:
         self.status_by_addr[status.addr] = status.value
+        if self._mapping_recorder is not None:
+            self._mapping_recorder.enqueue(status)
         for listener in list(self._listeners.get(status.addr, set())):
             listener(status)
