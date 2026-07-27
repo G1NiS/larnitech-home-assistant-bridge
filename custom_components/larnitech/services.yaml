@@ -19,7 +19,7 @@ start_mapping:
       description: Optional Larnitech config entry ID when more than one integration is loaded.
       required: false
       selector:
-        text:
+        text: {}
 
 stop_mapping:
   name: Stop switch mapping
@@ -30,4 +30,4 @@ stop_mapping:
       description: Optional Larnitech config entry ID when more than one integration is loaded.
       required: false
       selector:
-        text:
+        text: {}
