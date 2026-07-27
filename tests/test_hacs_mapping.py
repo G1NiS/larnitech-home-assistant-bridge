@@ -89,6 +89,29 @@ async def test_hacs_mapping_correlates_input_and_outputs(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_hacs_mapping_correlates_output_reported_before_input(tmp_path) -> None:
+    recorder = MappingRecorder(FakeHass(), tmp_path, group_window_seconds=3)
+    await recorder.async_start(
+        [
+            device("329:14", "Switch", "switch", "Setup"),
+            device("347:4", "Lempa", "lamp", "Svečių WC"),
+        ],
+        initial_values={"329:14": 0, "347:4": "off"},
+    )
+
+    recorder.enqueue(status("347:4", "on"))
+    recorder.enqueue(status("329:14", 1))
+    summary_path = await recorder.async_stop()
+
+    assert summary_path is not None
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert len(summary["steps"]) == 1
+    assert summary["steps"][0]["source"] == "input"
+    assert summary["steps"][0]["input"]["addr"] == "329:14"
+    assert summary["steps"][0]["outputs"][0]["addr"] == "347:4"
+
+
+@pytest.mark.asyncio
 async def test_hacs_mapping_ignores_first_status_without_baseline(tmp_path) -> None:
     recorder = MappingRecorder(FakeHass(), tmp_path)
     await recorder.async_start([device("347:4", "Lempa", "lamp", "Svečių WC")])
@@ -131,7 +154,7 @@ async def test_hacs_mapping_redacts_sensitive_fields(tmp_path) -> None:
                 "Switch",
                 "switch",
                 "Setup",
-                raw={"addr": "329:14", "api_key": "device-secret"},
+                raw={"addr": "329:14", "api_key": "device-secret", "key": 4},
             )
         ],
         initial_values={"329:14": 0},
@@ -141,7 +164,12 @@ async def test_hacs_mapping_redacts_sensitive_fields(tmp_path) -> None:
         status(
             "329:14",
             1,
-            raw={"addr": "329:14", "status": 1, "token": "event-secret"},
+            raw={
+                "addr": "329:14",
+                "status": 1,
+                "token": "event-secret",
+                "key": 4,
+            },
         )
     )
     await recorder.async_stop()
@@ -149,7 +177,9 @@ async def test_hacs_mapping_redacts_sensitive_fields(tmp_path) -> None:
     assert recorder.devices_path is not None
     devices = json.loads(recorder.devices_path.read_text(encoding="utf-8"))
     assert devices["devices"][0]["raw"]["api_key"] == "***"
+    assert devices["devices"][0]["raw"]["key"] == 4
 
     assert recorder.events_path is not None
     event = json.loads(recorder.events_path.read_text(encoding="utf-8").splitlines()[0])
     assert event["raw"]["token"] == "***"
+    assert event["raw"]["key"] == 4
