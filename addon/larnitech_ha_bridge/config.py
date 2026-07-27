@@ -39,6 +39,11 @@ class BridgeConfig(BaseModel):
     prefix_entity_names_with_area: bool = True
     publish_module_diagnostics: bool = True
 
+    # Temporary diagnostics for mapping physical wall buttons to changed outputs.
+    mapping_mode: bool = False
+    mapping_output_dir: str = "/share/larnitech_mapping"
+    mapping_group_window_seconds: int = Field(default=3, ge=1, le=10)
+
     @property
     def larnitech_ws_url(self) -> str:
         return f"ws://{self.larnitech_host}:{self.larnitech_port}/api"
@@ -65,6 +70,13 @@ def load_config() -> BridgeConfig:
             "bridge_id": os.getenv("BRIDGE_ID", "larnitech"),
             "log_level": os.getenv("LOG_LEVEL", "info"),
             "device_grouping": os.getenv("DEVICE_GROUPING", "bridge"),
+            "mapping_mode": os.getenv("MAPPING_MODE", "false").lower() in {"1", "true", "yes"},
+            "mapping_output_dir": os.getenv(
+                "MAPPING_OUTPUT_DIR", "/share/larnitech_mapping"
+            ),
+            "mapping_group_window_seconds": int(
+                os.getenv("MAPPING_GROUP_WINDOW_SECONDS", "3")
+            ),
         }
 
     if not raw.get("larnitech_api_key"):
