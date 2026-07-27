@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
+
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
@@ -31,6 +35,21 @@ from .hub import LarnitechHub
 from .models import LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
+
+SERVICE_START_MAPPING = "start_mapping"
+SERVICE_STOP_MAPPING = "stop_mapping"
+CONF_CONFIG_ENTRY_ID = "config_entry_id"
+CONF_GROUP_WINDOW_SECONDS = "group_window_seconds"
+
+START_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(CONF_GROUP_WINDOW_SECONDS, default=3.0): vol.All(
+            vol.Coerce(float), vol.Range(min=0.5, max=10.0)
+        ),
+    }
+)
+STOP_MAPPING_SCHEMA = vol.Schema({vol.Optional(CONF_CONFIG_ENTRY_ID): cv.string})
 
 TYPE_TO_ENTITY_DOMAIN = {
     TYPE_LAMP: "light",
@@ -78,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _cleanup_stale_hidden_entities(hass, hub.devices)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
+    _register_mapping_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
@@ -85,14 +105,84 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    hub: LarnitechHub | None = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    domain_data = hass.data.get(DOMAIN, {})
+    hub: LarnitechHub | None = domain_data.pop(entry.entry_id, None)
     if hub is not None:
         await hub.async_close()
+    if not domain_data:
+        hass.services.async_remove(DOMAIN, SERVICE_START_MAPPING)
+        hass.services.async_remove(DOMAIN, SERVICE_STOP_MAPPING)
     return unload_ok
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _register_mapping_services(hass: HomeAssistant) -> None:
+    if not hass.services.has_service(DOMAIN, SERVICE_START_MAPPING):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_START_MAPPING,
+            _async_handle_start_mapping,
+            schema=START_MAPPING_SCHEMA,
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_STOP_MAPPING):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_STOP_MAPPING,
+            _async_handle_stop_mapping,
+            schema=STOP_MAPPING_SCHEMA,
+        )
+
+
+async def _async_handle_start_mapping(call: ServiceCall) -> None:
+    hub = _hub_for_service(call.hass, call)
+    path = await hub.async_start_mapping(call.data[CONF_GROUP_WINDOW_SECONDS])
+    persistent_notification.async_create(
+        call.hass,
+        (
+            "Mapping started. Press one wall-switch key at a time and wait at least "
+            f"{call.data[CONF_GROUP_WINDOW_SECONDS]:g} seconds between keys. "
+            f"The latest summary will be written to `{path}`."
+        ),
+        title="Larnitech mapping started",
+        notification_id="larnitech_mapping",
+    )
+
+
+async def _async_handle_stop_mapping(call: ServiceCall) -> None:
+    hub = _hub_for_service(call.hass, call)
+    path = await hub.async_stop_mapping()
+    if path is None:
+        message = "No active Larnitech mapping session was found."
+    else:
+        message = f"Mapping stopped. Upload `{path}` for final switch and light labeling."
+    persistent_notification.async_create(
+        call.hass,
+        message,
+        title="Larnitech mapping stopped",
+        notification_id="larnitech_mapping",
+    )
+
+
+def _hub_for_service(hass: HomeAssistant, call: ServiceCall) -> LarnitechHub:
+    hubs: dict[str, LarnitechHub] = hass.data.get(DOMAIN, {})
+    requested_entry_id = call.data.get(CONF_CONFIG_ENTRY_ID)
+    if requested_entry_id:
+        hub = hubs.get(requested_entry_id)
+        if hub is None:
+            raise HomeAssistantError(
+                f"Larnitech config entry {requested_entry_id!r} is not loaded"
+            )
+        return hub
+    if len(hubs) == 1:
+        return next(iter(hubs.values()))
+    if not hubs:
+        raise HomeAssistantError("No loaded Larnitech integration was found")
+    raise HomeAssistantError(
+        "Multiple Larnitech integrations are loaded; provide config_entry_id"
+    )
 
 
 def _cleanup_stale_hidden_entities(
