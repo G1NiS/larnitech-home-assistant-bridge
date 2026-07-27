@@ -26,7 +26,16 @@ OUTPUT_TYPES = {
     "valve",
     "valve-heating",
 }
-_SENSITIVE_KEY_PARTS = ("api_key", "apikey", "key", "password", "passwd", "secret", "token")
+_SENSITIVE_KEYS = {
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "password",
+    "passwd",
+    "secret",
+    "token",
+}
 _MISSING = object()
 
 _OFF_STRINGS = {
@@ -204,7 +213,19 @@ class MappingRecorder:
         self._append_event(change, status.raw)
 
         if device_type in INPUT_TYPES and self._is_active(status.value):
-            self._start_step(change, source="input", now_mono=now_mono)
+            if (
+                self._current_step is not None
+                and self._current_step.source == "output-only"
+                and self._current_step.input is None
+                and self._current_step_last_event_mono is not None
+                and now_mono - self._current_step_last_event_mono <= self.group_window_seconds
+            ):
+                # Some controllers report the changed output before the input event.
+                self._current_step.input = change
+                self._current_step.source = "input"
+                self._current_step_last_event_mono = now_mono
+            else:
+                self._start_step(change, source="input", now_mono=now_mono)
             self._write_summary()
             return
 
@@ -305,7 +326,7 @@ class MappingRecorder:
             for key, item in value.items():
                 key_text = str(key)
                 normalized = key_text.lower().replace("-", "_")
-                if any(part in normalized for part in _SENSITIVE_KEY_PARTS):
+                if cls._is_sensitive_key(normalized):
                     sanitized[key_text] = "***"
                 else:
                     sanitized[key_text] = cls._redact(item)
@@ -315,6 +336,12 @@ class MappingRecorder:
         if isinstance(value, tuple):
             return [cls._redact(item) for item in value]
         return value
+
+    @staticmethod
+    def _is_sensitive_key(normalized: str) -> bool:
+        return normalized in _SENSITIVE_KEYS or normalized.endswith(
+            ("_api_key", "_password", "_passwd", "_secret", "_token")
+        )
 
     @staticmethod
     def _iso(value: datetime) -> str:
