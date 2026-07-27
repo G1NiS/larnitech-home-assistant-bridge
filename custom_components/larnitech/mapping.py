@@ -8,7 +8,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Iterable
 
 from .models import DeviceStatus, LarnitechDevice
 
@@ -26,6 +26,8 @@ OUTPUT_TYPES = {
     "valve",
     "valve-heating",
 }
+_SENSITIVE_KEY_PARTS = ("api_key", "apikey", "key", "password", "passwd", "secret", "token")
+_MISSING = object()
 
 _OFF_STRINGS = {
     "",
@@ -103,12 +105,18 @@ class MappingRecorder:
     def steps(self) -> tuple[MappingStep, ...]:
         return tuple(self._steps)
 
-    async def async_start(self, devices: Iterable[LarnitechDevice]) -> Path:
+    async def async_start(
+        self,
+        devices: Iterable[LarnitechDevice],
+        *,
+        initial_values: dict[str, Any] | None = None,
+    ) -> Path:
         if self._active:
             assert self.latest_summary_path is not None
             return self.latest_summary_path
 
         self._devices = {device.addr: device for device in devices}
+        self._last_values = dict(initial_values or {})
         now = datetime.now(timezone.utc)
         self._session_id = now.strftime("%Y%m%dT%H%M%SZ")
         self.events_path = self.output_dir / f"mapping_events_{self._session_id}.jsonl"
@@ -116,8 +124,12 @@ class MappingRecorder:
         self.latest_summary_path = self.output_dir / "mapping_summary_latest.json"
         self.devices_path = self.output_dir / f"mapping_devices_{self._session_id}.json"
 
-        await self.hass.async_add_executor_job(self._start_sync, now)
         self._active = True
+        try:
+            await self.hass.async_add_executor_job(self._start_sync, now)
+        except Exception:
+            self._active = False
+            raise
         self._worker_task = asyncio.create_task(self._worker())
         return self.latest_summary_path
 
@@ -164,11 +176,20 @@ class MappingRecorder:
     def _record_sync(self, status: DeviceStatus) -> None:
         now_mono = time.monotonic()
         now = datetime.now(timezone.utc)
-        previous = self._last_values.get(status.addr)
+        previous = self._last_values.get(status.addr, _MISSING)
         self._last_values[status.addr] = status.value
+
+        # A first status without a known baseline is not evidence of a physical change.
+        if previous is _MISSING or self._same_value(previous, status.value):
+            return
 
         device = self._devices.get(status.addr)
         device_type = (device.type if device else "unknown").strip().lower()
+
+        # Keep the export compact. Known sensors are not useful for switch mapping.
+        if device is not None and device_type not in INPUT_TYPES and device_type not in OUTPUT_TYPES:
+            return
+
         change = MappingChange(
             addr=status.addr,
             name=device.name if device else status.addr,
@@ -179,9 +200,6 @@ class MappingRecorder:
             observed_at=self._iso(now),
         )
         self._append_event(change, status.raw)
-
-        if self._same_value(previous, status.value):
-            return
 
         if device_type in INPUT_TYPES and self._is_active(status.value):
             self._start_step(change, source="input", now_mono=now_mono)
@@ -237,7 +255,7 @@ class MappingRecorder:
         payload = {
             "session_id": self._session_id,
             **asdict(change),
-            "raw": raw,
+            "raw": self._redact(raw),
         }
         with self.events_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
@@ -248,6 +266,7 @@ class MappingRecorder:
         payload = {
             "session_id": self._session_id,
             "updated_at": self._iso(datetime.now(timezone.utc)),
+            "active": self._active,
             "group_window_seconds": self.group_window_seconds,
             "instructions": (
                 "Each step represents one detected button press or one output-only change burst. "
@@ -267,15 +286,33 @@ class MappingRecorder:
         )
         os.replace(temp_path, path)
 
-    @staticmethod
-    def _device_dict(device: LarnitechDevice) -> dict[str, Any]:
+    @classmethod
+    def _device_dict(cls, device: LarnitechDevice) -> dict[str, Any]:
         return {
             "addr": device.addr,
             "name": device.name,
             "type": device.type,
             "area": device.area,
-            "raw": device.raw,
+            "raw": cls._redact(device.raw),
         }
+
+    @classmethod
+    def _redact(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            sanitized: dict[str, Any] = {}
+            for key, item in value.items():
+                key_text = str(key)
+                normalized = key_text.lower().replace("-", "_")
+                if any(part in normalized for part in _SENSITIVE_KEY_PARTS):
+                    sanitized[key_text] = "***"
+                else:
+                    sanitized[key_text] = cls._redact(item)
+            return sanitized
+        if isinstance(value, list):
+            return [cls._redact(item) for item in value]
+        if isinstance(value, tuple):
+            return [cls._redact(item) for item in value]
+        return value
 
     @staticmethod
     def _iso(value: datetime) -> str:
