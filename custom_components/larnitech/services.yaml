@@ -1,0 +1,33 @@
+start_mapping:
+  name: Start switch mapping
+  description: Start recording Larnitech wall-switch inputs and the outputs that change after each press.
+  fields:
+    group_window_seconds:
+      name: Grouping window
+      description: Time window used to group output changes caused by one key press.
+      default: 3
+      required: false
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+          mode: box
+          unit_of_measurement: s
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Larnitech config entry ID when more than one integration is loaded.
+      required: false
+      selector:
+        text: {}
+
+stop_mapping:
+  name: Stop switch mapping
+  description: Stop the active mapping session and finalize the JSON summary in the Home Assistant configuration directory.
+  fields:
+    config_entry_id:
+      name: Config entry ID
+      description: Optional Larnitech config entry ID when more than one integration is loaded.
+      required: false
+      selector:
+        text: {}

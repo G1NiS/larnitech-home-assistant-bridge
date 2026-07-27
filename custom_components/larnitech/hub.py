@@ -3,18 +3,22 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 
 from .api import LarnitechApiClient
+from .mapping import MappingRecorder
 from .models import DeviceStatus, LarnitechDevice
 
 _LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[[DeviceStatus], None]
 SETUP_AREA = "Setup"
+MAPPING_MAX_DURATION_SECONDS = 60 * 60
 
 
 def _is_setup_area(area: str | None) -> bool:
@@ -60,7 +64,13 @@ class LarnitechHub:
         self._status_api = LarnitechApiClient(host, port, api_key, name="status")
         self._command_lock = asyncio.Lock()
         self._status_task: asyncio.Task | None = None
+        self._mapping_recorder: MappingRecorder | None = None
+        self._mapping_timeout_task: asyncio.Task[None] | None = None
         self._closed = False
+
+    @property
+    def mapping_active(self) -> bool:
+        return self._mapping_recorder is not None and self._mapping_recorder.active
 
     async def async_setup(self) -> None:
         # Keep only one persistent WebSocket open. Some Larnitech controllers close
@@ -81,6 +91,7 @@ class LarnitechHub:
 
     async def async_close(self) -> None:
         self._closed = True
+        await self.async_stop_mapping()
         if self._status_task:
             self._status_task.cancel()
             try:
@@ -100,6 +111,68 @@ class LarnitechHub:
                 await command_api.set_status(addr, status)
             finally:
                 await command_api.close()
+
+    async def async_start_mapping(self, group_window_seconds: float = 3.0) -> Path:
+        if self.mapping_active:
+            assert self._mapping_recorder is not None
+            assert self._mapping_recorder.latest_summary_path is not None
+            return self._mapping_recorder.latest_summary_path
+
+        output_dir = Path(self.hass.config.path("larnitech_mapping"))
+        recorder = MappingRecorder(
+            self.hass,
+            output_dir,
+            group_window_seconds=group_window_seconds,
+        )
+        self._mapping_recorder = recorder
+        try:
+            path = await recorder.async_start(
+                self.devices,
+                initial_values=self.status_by_addr,
+            )
+        except Exception:
+            self._mapping_recorder = None
+            raise
+
+        self._mapping_timeout_task = asyncio.create_task(self._async_mapping_timeout())
+        _LOGGER.warning(
+            "Larnitech mapping session %s started; summary: %s; auto-stop: %s minutes",
+            recorder.session_id,
+            path,
+            MAPPING_MAX_DURATION_SECONDS // 60,
+        )
+        return path
+
+    async def async_stop_mapping(self) -> Path | None:
+        recorder = self._mapping_recorder
+        if recorder is None:
+            return None
+
+        # Stop accepting new status events before draining the recorder queue.
+        self._mapping_recorder = None
+        timeout_task = self._mapping_timeout_task
+        self._mapping_timeout_task = None
+        if timeout_task is not None and timeout_task is not asyncio.current_task():
+            timeout_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await timeout_task
+
+        path = await recorder.async_stop()
+        _LOGGER.warning("Larnitech mapping session stopped; summary: %s", path)
+        return path
+
+    async def _async_mapping_timeout(self) -> None:
+        try:
+            await asyncio.sleep(MAPPING_MAX_DURATION_SECONDS)
+            if self.mapping_active:
+                path = await self.async_stop_mapping()
+                _LOGGER.warning(
+                    "Larnitech mapping session stopped automatically after %s minutes; summary: %s",
+                    MAPPING_MAX_DURATION_SECONDS // 60,
+                    path,
+                )
+        except asyncio.CancelledError:
+            raise
 
     @callback
     def async_add_listener(self, addr: str, listener: Listener) -> Callable[[], None]:
@@ -178,5 +251,7 @@ class LarnitechHub:
     @callback
     def _handle_status(self, status: DeviceStatus) -> None:
         self.status_by_addr[status.addr] = status.value
+        if self._mapping_recorder is not None:
+            self._mapping_recorder.enqueue(status)
         for listener in list(self._listeners.get(status.addr, set())):
             listener(status)

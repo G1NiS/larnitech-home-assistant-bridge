@@ -15,4 +15,13 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
       - run: pytest
-      - run: ruff check .
+      - name: Run Ruff
+        run: ruff check . --output-format=concise | tee ruff-output.txt
+      - name: Upload Ruff output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-output
+          path: ruff-output.txt
+          if-no-files-found: ignore
+          retention-days: 1
