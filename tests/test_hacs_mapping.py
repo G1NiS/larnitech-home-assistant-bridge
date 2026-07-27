@@ -42,12 +42,22 @@ class FakeHass:
         return target(*args)
 
 
-def device(addr: str, name: str, type_: str, area: str) -> LarnitechDevice:
-    return LarnitechDevice(addr=addr, name=name, type=type_, area=area, raw={})
+def device(
+    addr: str,
+    name: str,
+    type_: str,
+    area: str,
+    raw: dict | None = None,
+) -> LarnitechDevice:
+    return LarnitechDevice(addr=addr, name=name, type=type_, area=area, raw=raw or {})
 
 
-def status(addr: str, value: object) -> DeviceStatus:
-    return DeviceStatus(addr=addr, value=value, raw={"addr": addr, "status": value})
+def status(addr: str, value: object, raw: dict | None = None) -> DeviceStatus:
+    return DeviceStatus(
+        addr=addr,
+        value=value,
+        raw=raw or {"addr": addr, "status": value},
+    )
 
 
 @pytest.mark.asyncio
@@ -58,7 +68,8 @@ async def test_hacs_mapping_correlates_input_and_outputs(tmp_path) -> None:
             device("329:14", "Switch", "switch", "Setup"),
             device("347:4", "Lempa", "lamp", "Svečių WC"),
             device("493:178", "LED", "dimmer-lamp", "Svečių WC"),
-        ]
+        ],
+        initial_values={"329:14": 0, "347:4": "off", "493:178": 0},
     )
 
     recorder.enqueue(status("329:14", 1))
@@ -68,6 +79,7 @@ async def test_hacs_mapping_correlates_input_and_outputs(tmp_path) -> None:
 
     assert summary_path is not None
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["active"] is False
     assert len(summary["steps"]) == 1
     assert summary["steps"][0]["input"]["addr"] == "329:14"
     assert [item["addr"] for item in summary["steps"][0]["outputs"]] == [
@@ -77,10 +89,26 @@ async def test_hacs_mapping_correlates_input_and_outputs(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_hacs_mapping_excludes_sensor_changes_from_summary(tmp_path) -> None:
+async def test_hacs_mapping_ignores_first_status_without_baseline(tmp_path) -> None:
+    recorder = MappingRecorder(FakeHass(), tmp_path)
+    await recorder.async_start([device("347:4", "Lempa", "lamp", "Svečių WC")])
+
+    recorder.enqueue(status("347:4", "on"))
+    summary_path = await recorder.async_stop()
+
+    assert summary_path is not None
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["steps"] == []
+    assert recorder.events_path is not None
+    assert recorder.events_path.read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.asyncio
+async def test_hacs_mapping_excludes_sensor_changes_from_export(tmp_path) -> None:
     recorder = MappingRecorder(FakeHass(), tmp_path)
     await recorder.async_start(
-        [device("443:30", "Motion", "motion-sensor", "Tambūras")]
+        [device("443:30", "Motion", "motion-sensor", "Tambūras")],
+        initial_values={"443:30": 0},
     )
 
     recorder.enqueue(status("443:30", 100))
@@ -90,4 +118,38 @@ async def test_hacs_mapping_excludes_sensor_changes_from_summary(tmp_path) -> No
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     assert summary["steps"] == []
     assert recorder.events_path is not None
-    assert len(recorder.events_path.read_text(encoding="utf-8").splitlines()) == 1
+    assert recorder.events_path.read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.asyncio
+async def test_hacs_mapping_redacts_sensitive_fields(tmp_path) -> None:
+    recorder = MappingRecorder(FakeHass(), tmp_path)
+    await recorder.async_start(
+        [
+            device(
+                "329:14",
+                "Switch",
+                "switch",
+                "Setup",
+                raw={"addr": "329:14", "api_key": "device-secret"},
+            )
+        ],
+        initial_values={"329:14": 0},
+    )
+
+    recorder.enqueue(
+        status(
+            "329:14",
+            1,
+            raw={"addr": "329:14", "status": 1, "token": "event-secret"},
+        )
+    )
+    await recorder.async_stop()
+
+    assert recorder.devices_path is not None
+    devices = json.loads(recorder.devices_path.read_text(encoding="utf-8"))
+    assert devices["devices"][0]["raw"]["api_key"] == "***"
+
+    assert recorder.events_path is not None
+    event = json.loads(recorder.events_path.read_text(encoding="utf-8").splitlines()[0])
+    assert event["raw"]["token"] == "***"
