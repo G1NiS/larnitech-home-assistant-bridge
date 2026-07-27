@@ -7,6 +7,7 @@ import signal
 from .commands import CommandKind, larnitech_status_for_command
 from .config import load_config
 from .larnitech_api import LarnitechApiClient, LarnitechApiError
+from .mapping import MappingRecorder
 from .models import LarnitechDevice
 from .mqtt_client import MqttBridgeClient
 
@@ -33,6 +34,20 @@ async def run_bridge() -> None:
     logger = logging.getLogger(__name__)
     pending_commands: asyncio.Queue[tuple[str, str, CommandKind]] = asyncio.Queue()
     devices_by_addr: dict[str, LarnitechDevice] = {}
+    mapping_recorder = (
+        MappingRecorder(
+            config.mapping_output_dir,
+            group_window_seconds=config.mapping_group_window_seconds,
+        )
+        if config.mapping_mode
+        else None
+    )
+
+    if mapping_recorder is not None:
+        logger.warning(
+            "Mapping mode is enabled. Status events will be recorded under %s",
+            config.mapping_output_dir,
+        )
 
     loop = asyncio.get_running_loop()
 
@@ -121,6 +136,9 @@ async def run_bridge() -> None:
 
             delay = RECONNECT_DELAY_INITIAL
             try:
+                if mapping_recorder is not None:
+                    mapping_recorder.start(devices)
+
                 filtered_devices = [
                     device
                     for device in devices
@@ -136,6 +154,13 @@ async def run_bridge() -> None:
                 await status_api.subscribe_status()
 
                 async for status in status_api.status_events():
+                    if mapping_recorder is not None:
+                        try:
+                            mapping_recorder.record(status)
+                        except Exception:
+                            logger.exception(
+                                "Mapping recorder failed for status event addr=%s", status.addr
+                            )
                     mqtt_client.publish_status(status)
             except asyncio.CancelledError:
                 raise
