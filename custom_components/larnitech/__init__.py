@@ -8,7 +8,7 @@ import voluptuous as vol
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
@@ -71,6 +71,9 @@ TYPE_TO_ENTITY_DOMAIN = {
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up domain-level Larnitech actions."""
+    hass.data.setdefault(DOMAIN, {})
+    _register_mapping_services(hass)
     return True
 
 
@@ -98,7 +101,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _cleanup_stale_hidden_entities(hass, hub.devices)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
-    _register_mapping_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
@@ -110,9 +112,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub: LarnitechHub | None = domain_data.pop(entry.entry_id, None)
     if hub is not None:
         await hub.async_close()
-    if not domain_data:
-        hass.services.async_remove(DOMAIN, SERVICE_START_MAPPING)
-        hass.services.async_remove(DOMAIN, SERVICE_STOP_MAPPING)
     return unload_ok
 
 
@@ -173,15 +172,15 @@ def _hub_for_service(hass: HomeAssistant, call: ServiceCall) -> LarnitechHub:
     if requested_entry_id:
         hub = hubs.get(requested_entry_id)
         if hub is None:
-            raise HomeAssistantError(
+            raise ServiceValidationError(
                 f"Larnitech config entry {requested_entry_id!r} is not loaded"
             )
         return hub
     if len(hubs) == 1:
         return next(iter(hubs.values()))
     if not hubs:
-        raise HomeAssistantError("No loaded Larnitech integration was found")
-    raise HomeAssistantError(
+        raise ServiceValidationError("No loaded Larnitech integration was found")
+    raise ServiceValidationError(
         "Multiple Larnitech integrations are loaded; provide config_entry_id"
     )
 
