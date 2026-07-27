@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[[DeviceStatus], None]
 SETUP_AREA = "Setup"
+MAPPING_MAX_DURATION_SECONDS = 60 * 60
 
 
 def _is_setup_area(area: str | None) -> bool:
@@ -63,6 +65,7 @@ class LarnitechHub:
         self._command_lock = asyncio.Lock()
         self._status_task: asyncio.Task | None = None
         self._mapping_recorder: MappingRecorder | None = None
+        self._mapping_timeout_task: asyncio.Task[None] | None = None
         self._closed = False
 
     @property
@@ -121,12 +124,22 @@ class LarnitechHub:
             output_dir,
             group_window_seconds=group_window_seconds,
         )
-        path = await recorder.async_start(self.devices)
         self._mapping_recorder = recorder
+        try:
+            path = await recorder.async_start(
+                self.devices,
+                initial_values=self.status_by_addr,
+            )
+        except Exception:
+            self._mapping_recorder = None
+            raise
+
+        self._mapping_timeout_task = asyncio.create_task(self._async_mapping_timeout())
         _LOGGER.warning(
-            "Larnitech mapping session %s started; summary: %s",
+            "Larnitech mapping session %s started; summary: %s; auto-stop: %s minutes",
             recorder.session_id,
             path,
+            MAPPING_MAX_DURATION_SECONDS // 60,
         )
         return path
 
@@ -134,10 +147,32 @@ class LarnitechHub:
         recorder = self._mapping_recorder
         if recorder is None:
             return None
+
+        # Stop accepting new status events before draining the recorder queue.
+        self._mapping_recorder = None
+        timeout_task = self._mapping_timeout_task
+        self._mapping_timeout_task = None
+        if timeout_task is not None and timeout_task is not asyncio.current_task():
+            timeout_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await timeout_task
+
         path = await recorder.async_stop()
         _LOGGER.warning("Larnitech mapping session stopped; summary: %s", path)
-        self._mapping_recorder = None
         return path
+
+    async def _async_mapping_timeout(self) -> None:
+        try:
+            await asyncio.sleep(MAPPING_MAX_DURATION_SECONDS)
+            if self.mapping_active:
+                path = await self.async_stop_mapping()
+                _LOGGER.warning(
+                    "Larnitech mapping session stopped automatically after %s minutes; summary: %s",
+                    MAPPING_MAX_DURATION_SECONDS // 60,
+                    path,
+                )
+        except asyncio.CancelledError:
+            raise
 
     @callback
     def async_add_listener(self, addr: str, listener: Listener) -> Callable[[], None]:
