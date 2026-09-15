@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.34 - 2026-09-15
+
+### Changed
+
+- API2 commands and status events now share one persistent WebSocket connection.
+- Added a 120-second status refresh to detect stalled connections and recover missed events.
+
+### Fixed
+
+- Added serialized API2 request/response handling without competing WebSocket receivers.
+- Added exponential reconnect backoff and a full status refresh after reconnect.
+- Larnitech entities are marked unavailable while the API2 connection is recovering.
+- Added an API2 connectivity diagnostic with reconnect count and last-disconnect time.
+
 ## 0.1.33 - 2026-07-27
 
 ### Added

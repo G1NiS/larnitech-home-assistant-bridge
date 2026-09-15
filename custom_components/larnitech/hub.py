@@ -5,6 +5,7 @@ import logging
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,12 @@ from .models import DeviceStatus, LarnitechDevice
 _LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[[DeviceStatus], None]
+AvailabilityListener = Callable[[bool], None]
 SETUP_AREA = "Setup"
 MAPPING_MAX_DURATION_SECONDS = 60 * 60
+STATUS_REFRESH_INTERVAL_SECONDS = 120
+RECONNECT_DELAY_SECONDS = 5
+RECONNECT_MAX_DELAY_SECONDS = 60
 
 
 def _is_setup_area(area: str | None) -> bool:
@@ -61,22 +66,28 @@ class LarnitechHub:
         self.devices_by_addr: dict[str, LarnitechDevice] = {}
         self.status_by_addr: dict[str, Any] = {}
         self._listeners: dict[str, set[Listener]] = {}
+        self._availability_listeners: set[AvailabilityListener] = set()
         self._status_api = LarnitechApiClient(host, port, api_key, name="status")
-        self._command_lock = asyncio.Lock()
         self._status_task: asyncio.Task | None = None
         self._mapping_recorder: MappingRecorder | None = None
         self._mapping_timeout_task: asyncio.Task[None] | None = None
         self._closed = False
+        self._available = False
+        self._ever_connected = False
+        self.reconnect_count = 0
+        self.last_disconnect: datetime | None = None
 
     @property
     def mapping_active(self) -> bool:
         return self._mapping_recorder is not None and self._mapping_recorder.active
 
+    @property
+    def available(self) -> bool:
+        return self._available
+
     async def async_setup(self) -> None:
-        # Keep only one persistent WebSocket open. Some Larnitech controllers close
-        # a second simultaneous API2 WebSocket during the HTTP upgrade handshake,
-        # which Home Assistant reports as "did not receive a valid HTTP response".
-        # Commands use short-lived connections in async_set_status instead.
+        # API2 commands and status events share this one persistent WebSocket.
+        # Larnitech controllers may reject or drop simultaneous API2 connections.
         await self._status_api.connect()
         devices = await self._status_api.get_devices()
         devices = self._with_area_overrides(devices)
@@ -86,11 +97,13 @@ class LarnitechHub:
             if "status" in device.raw:
                 self.status_by_addr[device.addr] = device.raw["status"]
         await self._status_api.subscribe_status()
+        self._set_available(True)
         self._status_task = asyncio.create_task(self._status_loop())
         _LOGGER.info("Discovered %s Larnitech devices", len(self.devices))
 
     async def async_close(self) -> None:
         self._closed = True
+        self._set_available(False)
         await self.async_stop_mapping()
         if self._status_task:
             self._status_task.cancel()
@@ -101,16 +114,9 @@ class LarnitechHub:
         await self._status_api.close()
 
     async def async_set_status(self, addr: str, status: Any) -> None:
-        # Use a transient command connection instead of keeping a second WebSocket
-        # open for the whole integration lifetime. This avoids controller-side
-        # connection limits and stale command sockets after HA reloads.
-        async with self._command_lock:
-            command_api = LarnitechApiClient(self.host, self.port, self.api_key, name="command")
-            try:
-                await command_api.connect()
-                await command_api.set_status(addr, status)
-            finally:
-                await command_api.close()
+        if not self.available:
+            raise RuntimeError("Larnitech API2 is reconnecting")
+        await self._status_api.set_status(addr, status)
 
     async def async_start_mapping(self, group_window_seconds: float = 3.0) -> Path:
         if self.mapping_active:
@@ -185,6 +191,19 @@ class LarnitechHub:
 
         return remove
 
+    @callback
+    def async_add_availability_listener(
+        self,
+        listener: AvailabilityListener,
+    ) -> Callable[[], None]:
+        self._availability_listeners.add(listener)
+
+        @callback
+        def remove() -> None:
+            self._availability_listeners.discard(listener)
+
+        return remove
+
     def _with_area_overrides(self, devices: list[LarnitechDevice]) -> list[LarnitechDevice]:
         if not self.area_overrides:
             return devices
@@ -228,25 +247,96 @@ class LarnitechHub:
         return enriched
 
     async def _status_loop(self) -> None:
+        reconnect_delay = RECONNECT_DELAY_SECONDS
         while not self._closed:
+            next_refresh = asyncio.get_running_loop().time() + STATUS_REFRESH_INTERVAL_SECONDS
             try:
-                async for message in self._status_api.raw_messages():
+                while not self._closed:
+                    timeout = max(0, next_refresh - asyncio.get_running_loop().time())
+                    try:
+                        message = await asyncio.wait_for(
+                            self._status_api.receive_message(),
+                            timeout=timeout,
+                        )
+                    except TimeoutError:
+                        self._refresh_statuses(await self._status_api.get_devices())
+                        next_refresh = (
+                            asyncio.get_running_loop().time() + STATUS_REFRESH_INTERVAL_SECONDS
+                        )
+                        continue
+
                     for status in self._status_api.extract_status_events(message):
                         self._handle_status(status)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 if self._closed:
                     return
-                _LOGGER.exception("Larnitech status stream failed, reconnecting")
-                await self._status_api.close()
-                await asyncio.sleep(5)
+                self._set_available(False)
+                _LOGGER.warning(
+                    "Larnitech status stream disconnected: %s; reconnecting",
+                    exc,
+                )
+
+            await self._status_api.close()
+
+            while not self._closed:
                 try:
+                    await asyncio.sleep(reconnect_delay)
                     await self._status_api.connect()
+                    self._refresh_statuses(await self._status_api.get_devices())
                     await self._status_api.subscribe_status()
+                    reconnect_delay = RECONNECT_DELAY_SECONDS
+                    self._set_available(True)
+                    _LOGGER.info("Larnitech status stream reconnected and state refreshed")
+                    break
+                except asyncio.CancelledError:
+                    raise
                 except Exception:
-                    _LOGGER.exception("Failed to reconnect Larnitech status stream")
-                    await asyncio.sleep(10)
+                    if self._closed:
+                        return
+                    _LOGGER.exception(
+                        "Failed to reconnect Larnitech status stream; retrying in %s seconds",
+                        reconnect_delay,
+                    )
+                    await self._status_api.close()
+                    reconnect_delay = min(
+                        reconnect_delay * 2,
+                        RECONNECT_MAX_DELAY_SECONDS,
+                    )
+
+    def _refresh_statuses(self, devices: list[LarnitechDevice]) -> None:
+        for device in devices:
+            if "status" in device.raw:
+                self._handle_status(
+                    DeviceStatus(
+                        addr=device.addr,
+                        value=device.raw["status"],
+                        raw=device.raw,
+                    )
+                )
+
+    @callback
+    def _set_available(self, available: bool) -> None:
+        if self._available == available:
+            return
+        if available:
+            if self._ever_connected:
+                self.reconnect_count += 1
+            self._ever_connected = True
+        elif self._ever_connected and not self._closed:
+            self.last_disconnect = datetime.now(UTC)
+        self._available = available
+        for listener in list(self._availability_listeners):
+            listener(available)
+        for addr, listeners in self._listeners.items():
+            status = DeviceStatus(
+                addr=addr,
+                value=self.status_by_addr.get(addr),
+                raw={},
+            )
+            for listener in list(listeners):
+                listener(status)
 
     @callback
     def _handle_status(self, status: DeviceStatus) -> None:
