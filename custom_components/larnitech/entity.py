@@ -199,6 +199,10 @@ class LarnitechEntity(Entity):
     def status(self) -> Any:
         return self.hub.status_by_addr.get(self.device.addr, self.device.raw.get("status"))
 
+    @property
+    def available(self) -> bool:
+        return self.hub.available
+
 
 def status_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):

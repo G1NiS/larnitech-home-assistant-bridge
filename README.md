@@ -14,7 +14,7 @@ Larnitech HA Bridge connects Home Assistant to a local Larnitech API2 WebSocket 
 
 ## Current status
 
-Current HACS integration version: **0.1.33**  
+Current HACS integration version: **0.1.34**
 Current Home Assistant add-on version: **0.1.23**
 
 The public HACS integration is free and does not require a license key.
@@ -22,7 +22,9 @@ The public HACS integration is free and does not require a license key.
 ## Features
 
 - Local Larnitech API2 WebSocket connection.
-- Single persistent status WebSocket; commands use short-lived API2 connections.
+- One persistent API2 WebSocket shared by status events and commands.
+- Automatic connection health checks, reconnect backoff and full status resync.
+- API2 connectivity diagnostic with reconnect count and last-disconnect time.
 - Native Home Assistant config flow.
 - Lights and dimmers as Home Assistant `light` entities.
 - Common sensors and binary sensors.
