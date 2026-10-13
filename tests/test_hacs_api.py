@@ -31,7 +31,7 @@ def _load_module(name: str):
     return module
 
 
-_load_module("models")
+models = _load_module("models")
 api = _load_module("api")
 LarnitechApiClient = api.LarnitechApiClient
 
@@ -220,3 +220,26 @@ async def test_subscribed_motion_response_reaches_status_stream(monkeypatch) -> 
     later = await asyncio.wait_for(client.receive_message(), timeout=1)
     assert LarnitechApiClient.extract_status_events(later)[0].value == "0x00"
     await client.close()
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"state": 0.0}, False),
+        ({"state": 0.01}, True),
+        ({"state": 17.5}, True),
+        ({"state": "2.5"}, True),
+        ({"state": "0.0"}, False),
+        ({"state": "0x01"}, True),
+        ({"state": "0x00"}, False),
+        ({"state": "on"}, True),
+        ({"state": "off"}, False),
+        ({"state": "undefined"}, False),
+        ({"state": -1}, False),
+        ({"state": "nan"}, False),
+        ({"state": "inf"}, False),
+        (None, False),
+    ],
+)
+def test_motion_status_is_on(raw, expected) -> None:
+    assert models.motion_status_is_on(raw) is expected

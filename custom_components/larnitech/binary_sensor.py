@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, TYPE_DOOR, TYPE_LEAK, TYPE_MOTION
 from .entity import LarnitechEntity, state_is_on
 from .hub import LarnitechHub
-from .models import LarnitechDevice
+from .models import LarnitechDevice, motion_status_is_on
 
 BINARY_TYPES = {TYPE_MOTION, TYPE_DOOR, TYPE_LEAK}
 
@@ -87,4 +87,6 @@ class LarnitechBinarySensor(LarnitechEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
+        if self.device.type == TYPE_MOTION:
+            return motion_status_is_on(self.status)
         return state_is_on(self.status)
