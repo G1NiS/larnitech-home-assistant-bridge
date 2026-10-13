@@ -67,7 +67,17 @@ class FakeWebSocket:
                 }
             )
         elif request_type == "status-subscribe":
-            self.incoming.put_nowait({"response": "status-subscribe", "result": "success"})
+            if message.get("addr"):
+                self.incoming.put_nowait(
+                    {
+                        "response": "status-subscribe",
+                        "devices": [
+                            {"addr": message["addr"], "status": "0x01"},
+                        ],
+                    }
+                )
+            else:
+                self.incoming.put_nowait({"response": "status-subscribe", "result": "success"})
         elif request_type == "status-set":
             self.incoming.put_nowait(
                 {
@@ -182,4 +192,31 @@ async def test_cancelled_status_wait_does_not_close_message_stream(monkeypatch) 
     event = await asyncio.wait_for(client.receive_message(), timeout=1)
 
     assert event["event"] == "statuses"
+    await client.close()
+
+@pytest.mark.asyncio
+async def test_subscribed_motion_response_reaches_status_stream(monkeypatch) -> None:
+    websocket = FakeWebSocket()
+
+    async def fake_connect(_url: str, **_kwargs):
+        return websocket
+
+    monkeypatch.setattr(api.websockets, "connect", fake_connect)
+    client = LarnitechApiClient("controller", 2041, "secret")
+    await client.connect()
+
+    await client.subscribe_status("400:30")
+    initial = await asyncio.wait_for(client.receive_message(), timeout=1)
+    assert initial["response"] == "status-subscribe"
+    assert initial["devices"][0]["addr"] == "400:30"
+    assert LarnitechApiClient.extract_status_events(initial)[0].value == "0x01"
+
+    websocket.incoming.put_nowait(
+        {
+            "response": "status-subscribe",
+            "devices": [{"addr": "400:30", "status": "0x00"}],
+        }
+    )
+    later = await asyncio.wait_for(client.receive_message(), timeout=1)
+    assert LarnitechApiClient.extract_status_events(later)[0].value == "0x00"
     await client.close()
