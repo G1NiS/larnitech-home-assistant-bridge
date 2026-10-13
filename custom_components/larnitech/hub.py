@@ -12,6 +12,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 
 from .api import LarnitechApiClient
+from .const import TYPE_MOTION
 from .mapping import MappingRecorder
 from .models import DeviceStatus, LarnitechDevice
 
@@ -96,7 +97,7 @@ class LarnitechHub:
         for device in self.devices:
             if "status" in device.raw:
                 self.status_by_addr[device.addr] = device.raw["status"]
-        await self._status_api.subscribe_status()
+        await self._subscribe_status()
         self._set_available(True)
         self._status_task = asyncio.create_task(self._status_loop())
         _LOGGER.info("Discovered %s Larnitech devices", len(self.devices))
@@ -285,7 +286,7 @@ class LarnitechHub:
                     await asyncio.sleep(reconnect_delay)
                     await self._status_api.connect()
                     self._refresh_statuses(await self._status_api.get_devices())
-                    await self._status_api.subscribe_status()
+                    await self._subscribe_status()
                     reconnect_delay = RECONNECT_DELAY_SECONDS
                     self._set_available(True)
                     _LOGGER.info("Larnitech status stream reconnected and state refreshed")
@@ -304,6 +305,18 @@ class LarnitechHub:
                         reconnect_delay * 2,
                         RECONNECT_MAX_DELAY_SECONDS,
                     )
+
+    async def _subscribe_status(self) -> None:
+        """Use both global and per-address subscriptions for physical motion.
+
+        Some API2 controllers only publish the status-subscribe stream for
+        explicitly addressed devices. Keep the existing global subscription
+        for all other entity types.
+        """
+        await self._status_api.subscribe_status()
+        for device in self.devices:
+            if device.type == TYPE_MOTION:
+                await self._status_api.subscribe_status(addr=device.addr)
 
     def _refresh_statuses(self, devices: list[LarnitechDevice]) -> None:
         for device in devices:
