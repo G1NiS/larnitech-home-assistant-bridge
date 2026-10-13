@@ -160,9 +160,18 @@ class LarnitechApiClient:
                     and not is_event
                     and (response_type is None or response_type == request_type)
                 )
+                # API2 delivers subscribed status updates as
+                # {"response": "status-subscribe", "devices": [...]} as well
+                # as {"event": "statuses", "devices": [...]}.
+                is_subscription_status = (
+                    response_type == "status-subscribe"
+                    and isinstance(data.get("devices"), list)
+                )
                 if is_expected_response:
                     pending.set_result(data)
-                elif response_type is None:
+                    if is_subscription_status:
+                        message_queue.put_nowait(data)
+                elif response_type is None or is_subscription_status:
                     message_queue.put_nowait(data)
                 else:
                     _LOGGER.debug(
@@ -197,9 +206,12 @@ class LarnitechApiClient:
     async def set_status(self, addr: str, status: Any) -> dict[str, Any]:
         return await self.request("status-set", addr=addr, status=status)
 
-    async def subscribe_status(self) -> None:
+    async def subscribe_status(self, addr: str | None = None) -> None:
         try:
-            await self.request("status-subscribe")
+            if addr is None:
+                await self.request("status-subscribe")
+            else:
+                await self.request("status-subscribe", addr=addr)
         except LarnitechApiError as exc:
             _LOGGER.warning("[%s] Status subscription failed: %s", self.name, exc)
 

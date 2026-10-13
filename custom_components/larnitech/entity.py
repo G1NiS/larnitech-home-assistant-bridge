@@ -213,6 +213,11 @@ def status_dict(value: Any) -> dict[str, Any]:
 def state_is_on(value: Any) -> bool:
     data = status_dict(value)
     state = str(data.get("state", data.get("value", value))).strip().lower()
+    if state.startswith("0x"):
+        try:
+            return int(state, 16) != 0
+        except ValueError:
+            return False
     return state in {"on", "open", "opened", "true", "1", "yes"}
 
 
